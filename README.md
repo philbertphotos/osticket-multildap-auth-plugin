@@ -1,4 +1,4 @@
-#Multiple Domian LDAP Server Authentication for osTicket
+#Multiple Domain LDAP Authentication for osTicket
 =====================================
 Plugin for OS Ticket that allows for authentication with multiple domains for agents and/or clients on osTicket.
 
