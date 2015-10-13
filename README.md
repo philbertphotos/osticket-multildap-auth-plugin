@@ -18,6 +18,8 @@ simply create a folder in the "includes\plugins\multi-ldap" of your osticket ins
 Configuration 
 =============
 It is pretty stright forward just when adding the second domain make user you put a "," or ";" where needed.
+see image below
+http://osticket.com/forum/uploads/FileUpload/29/e87dda088e77d2bd497f22b82989e7.png
 
 Roadmap
 ==========
