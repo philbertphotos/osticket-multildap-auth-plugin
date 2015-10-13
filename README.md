@@ -8,7 +8,7 @@ Features
  - SSL connection support.
  - Login for both agents and clients (can be toggled for neither, either, or both).
  - Searchs and combines users in both domains into one
- ![Alt text](http://osticket.com/forum/uploads/FileUpload/08/6bb40e0ef6b5739ec010c9f1391a68.png "Config Page")
+ ![Alt text](http://osticket.com/forum/uploads/FileUpload/08/6bb40e0ef6b5739ec010c9f1391a68.png "User lookup")
 
 Installing
 ==========
