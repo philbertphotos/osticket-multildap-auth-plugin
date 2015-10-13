@@ -13,7 +13,15 @@ Installing
 
 ### Prebuilt
 
-to be updated.........
+simply create a folder in the "includes\plugins\multi-ldap" of your osticket install
+
+Configuration 
+=============
+It is pretty stright forward just when adding the second domain make user you put a "," or ";" where needed.
+
+Roadmap
+==========
+Planning on adding a TAB feature to make setting section easier to manage.
 
 ### From source
 
