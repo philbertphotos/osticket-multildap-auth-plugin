@@ -25,6 +25,7 @@ see image below
 Roadmap
 ==========
 Planning on adding a TAB feature to make setting section easier to manage.
+Auto create users.
 
 ### From source
 
