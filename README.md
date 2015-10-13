@@ -15,7 +15,7 @@ Installing
 
 ### Prebuilt
 
-simply create a folder in the "includes\plugins\multi-ldap" of your osticket install
+simply create a folder in the "includes\plugins\multi-ldap" on your osticket install
 
 Configuration 
 =============
