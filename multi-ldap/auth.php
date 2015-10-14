@@ -220,8 +220,8 @@ function authenticate($username, $password = null)
 			$loginfo[0]['bool'] = false;
 			$loginfo[0]['msg'] = ($data['sd'] . " error: " . $ldap->ldapErrorCode . " - " . $ldap->ldapErrorText);
 			}
-			$this->errorlog('debug', 'AuthStaffType', $this->type);
-			$this->errorlog('debug', 'LogInfo', $loginfo);
+			//$this->errorlog('debug', 'AuthStaffType', $this->type);
+			//$this->errorlog('debug', 'LogInfo', $loginfo);
 		if ($chkUser)
 				{
 return $this->authOrCreate($username);
@@ -463,11 +463,11 @@ function search($query)
     }
 	
     function lookupAndSync($username, $dn) {
-		$this->errorlog('debug', 'lookupAndSync', $username);
+		//$this->errorlog('debug', 'lookupAndSync', $username);
         switch ($this->type) {
         case 'staff':
             if (($user = StaffSession::lookup($username)) && $user->getId()) {
-				$this->errorlog('info', 'StaffSession', $username);
+				//$this->errorlog('info', 'StaffSession', $username);
                 if (!$user instanceof StaffSession) {
                     // osTicket <= v1.9.7 or so
                     $user = new StaffSession($user->getId());
@@ -481,7 +481,7 @@ function search($query)
             // addresss as well as the username when looking up the user
             // locally.
             if (!($info = $this->lookup($dn, false)))
-				$this->errorlog('debug', 'lookupAndSync2', $username);
+				//$this->errorlog('debug', 'lookupAndSync2', $username);
                 return;
             $acct = false;
             foreach (array($username, $info['username'], $info['email']) as $name) {
@@ -525,7 +525,7 @@ class StaffLDAPAuthentication extends StaffAuthenticationBackend
 			//$hit[0]['backend'] = static::$id;
             //$hit[0]['id'] = static::$id . ':' . $hit[0]['dn'];
         }
-		$this->_ldap->errorlog('debug', 'MainSearchHit2', $hit);
+		//$this->_ldap->errorlog('debug', 'MainSearchHit2', $hit);
         return ($hit);
     }
     function search($query) {
@@ -536,7 +536,7 @@ class StaffLDAPAuthentication extends StaffAuthenticationBackend
            // $h['backend'] = static::$id;
            // $h['id'] = static::$id . ':' . $h['dn'];
         }
-		$this->_ldap->errorlog('debug', 'MainSearchHits', $hits);
+		//$this->_ldap->errorlog('debug', 'MainSearchHits', $hits);
         return $hits;
     }
 }
