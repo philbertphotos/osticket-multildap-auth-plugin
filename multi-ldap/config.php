@@ -92,13 +92,6 @@ class LdapMultiAuthPluginConfig extends PluginConfig {
                     'desc' => $__('Enable authentication of clients')
                 )
             )),
-            'multiauth-force-register' => new BooleanField(array(
-                'label' => $__('Force client registration'),
-                'default' => true,
-                'configuration' => array(
-                    'desc' => $__('This is useful if you have public registration disabled')
-                )
-            )),
             'multiauth-debug' => new SectionBreakField(array(
                 'label' => $__('Debug Mode'),
                 'hint' => $__('Turns debugging on or off check the "System Logs" for entires'),

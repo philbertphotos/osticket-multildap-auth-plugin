@@ -22,7 +22,7 @@ class LDAPAuthentication {
         }
     }
 
-	 function getDomain() {
+	 function getDomaingetDomain() {
         if (!($shortdomain = $this->getConfig()->get('shortdomain'))
                 || !($shortdomain = preg_split(',', $shortdomain))) {
 			return $shortdomain;
@@ -138,10 +138,9 @@ function errorlog($level, $title, $msg) {
         return $result;
     }
 
-    function setConnection() {
+    function getConnection($force_reconnect=false) {
 			$ldap             = new AuthLdap();
 			$ldap->serverType = 'ActiveDirectory';
-			return $ldap;
 		}
 	
 	function connectcheck($ldapinfo) {
@@ -163,18 +162,10 @@ function errorlog($level, $title, $msg) {
 	return $conninfo;
 	}
 	
-    function getEmail($ldapinfo, $user) {
-			$filter = "(&(objectCategory=person)(objectClass=user)(|(sAMAccountName={q}*)(firstName={q}*)(lastName={q}*)(displayName={q}*)))";
-			if ($userinfo = $ldapinfo->getUsers($user, array(
-				'mail'
-			) , $filter))
-			return $userlist;
-		}
-	
 function authenticate($username, $password = null)
 	{
-	$this->errorlog('debug', 'authenticate', $username . " " . $password);
 	if (!$password) return null;
+
 	// check if they used thier email to login.
 
 	if (eregi("^[_a-z0-9-]+(\.[_a-z0-9-]+)*@[a-z0-9-]+(\.[a-z0-9-]+)*(\.[a-z]{2,3})$", $username))
@@ -196,7 +187,7 @@ function authenticate($username, $password = null)
 			'servers' => $serversa[$i]
 		);
 		}
-	$chkUser = null;
+
 	foreach($ldapinfo as $data)
 		{
 		$ldap = new AuthLdap();
@@ -231,19 +222,15 @@ function authenticate($username, $password = null)
 			}
 			$this->errorlog('debug', 'AuthStaffType', $this->type);
 			$this->errorlog('debug', 'LogInfo', $loginfo);
-			if ($chkUser)
-			break;
-			}
 		if ($chkUser)
 				{
-			return $this->authOrCreate($username);
-				} else {
-				return;
-			}
+return $this->authOrCreate($username);
+					}
+				}
 		}
 
+
 function authOrCreate($username) {
-	global $cfg;
     switch($this->type) {
       case 'staff':
         if (($user = StaffSession::lookup($username)) && $user->getId()) {
@@ -255,30 +242,19 @@ function authOrCreate($username) {
         }
         break;
       case 'client':
-	        // Lookup all the information on the user. Try to get the email
-            // addresss as well as the username when looking up the user
-            // locally.
-            if (!($info = $this->search($username)[0]))
-                return;
-
-			$acct = ClientAccount::lookupByUsername($username);
-
-      if ($acct && $acct->getId()) {
-        $client = new ClientSession(new EndUser($acct->getUser()));
-      }
-      if (!$client) {
-        $client = new ClientCreateRequest($this, $username, $info);
-        if (!$cfg || !$cfg->isClientRegistrationEnabled() && self::$config->get('multiauth-force-register')) {
-          $client = $client->attemptAutoRegister();
+        $user = ClientAccount::lookupByUsername($user);
+        if ($user && $user->getID()) {
+          return new ClientSession(new EndUser($username));
         }
-      }
-      return $client;
+        return new ClientCreateRequest(
+            $this, $username, array());
+        break;
     }
     return null;
   }
-   
-function lookup($lookup_dn) {
-	$this->errorlog('info', 'function lookup', $lookup_dn);
+
+function lookup($lookup_dn, $bind=true) {
+	//$this->errorlog('info', 'function lookup', $lookup_dn);
 $lookup_user = array();
    preg_match('/(dc=(?:[^C]|C(?!N=))*)(?:;|$)/i', $lookup_dn, $match);
    $base_dn = str_replace(' ', '', $match[0]);
@@ -373,8 +349,10 @@ $lookup_user = array();
 			
 			$this->errorlog('debug', 'ConnInfo', json_encode($conninfo));
 			}
- //$this->errorlog('info', 'LookupInfo', json_encode($lookup_user));
-  	return $lookup_user;
+   
+  //$this->errorlog('info', 'LookupInfo', json_encode($lookup_user));
+  //$lookup_user = array_merge($lookup_user, $lookup_user);
+	return $lookup_user;
  }
 
 function search($query)
@@ -458,8 +436,67 @@ function search($query)
 			);
 			}
 		}
+		//$this->errorlog('info', 'search', $combined_userlist);
 	return $combined_userlist;
 	}
+	
+    function _getUserInfoArray($e, $schema) {
+        // Detect first and last name if only full name is given
+        if (!($first = $this->_getValue($e, $schema['first']))
+                || !($last = $this->_getValue($e, $schema['last']))) {
+            $name = new PersonsName($this->_getValue($e, $schema['full']));
+            $first = $name->getFirst();
+            $last = $name->getLast();
+        }
+        else
+            $name = "$first $last";
+        return array(
+            'username' => $this->_getValue($e, $schema['username']),
+            'first' => $first,
+            'last' => $last,
+            'name' => $name,
+            'email' => $this->_getValue($e, $schema['email']),
+            'phone' => $this->_getValue($e, $schema['phone']),
+            'mobile' => $this->_getValue($e, $schema['mobile']),
+            'dn' => $e->dn(),
+        );
+    }
+	
+    function lookupAndSync($username, $dn) {
+		$this->errorlog('debug', 'lookupAndSync', $username);
+        switch ($this->type) {
+        case 'staff':
+            if (($user = StaffSession::lookup($username)) && $user->getId()) {
+				$this->errorlog('info', 'StaffSession', $username);
+                if (!$user instanceof StaffSession) {
+                    // osTicket <= v1.9.7 or so
+                    $user = new StaffSession($user->getId());
+                }
+                return $user;
+            }
+            break;
+        case 'client':
+
+            // Lookup all the information on the user. Try to get the email
+            // addresss as well as the username when looking up the user
+            // locally.
+            if (!($info = $this->lookup($dn, false)))
+				$this->errorlog('debug', 'lookupAndSync2', $username);
+                return;
+            $acct = false;
+            foreach (array($username, $info['username'], $info['email']) as $name) {
+                if ($name && ($acct = ClientAccount::lookupByUsername($name)))
+                    break;
+            }
+            if (!$acct)
+                return new ClientCreateRequest($this, $username, $info);
+            if (($client = new ClientSession(new EndUser($acct->getUser())))
+                    && !$client->getId())
+                return;
+            return $client;
+        }
+        // TODO: Auto-create users, etc.
+    }
 }
 
 class StaffLDAPAuthentication extends StaffAuthenticationBackend
@@ -482,12 +519,13 @@ class StaffLDAPAuthentication extends StaffAuthenticationBackend
     function lookup($query) {
         $hit =  $this->_ldap->lookup($query);
         if ($hit) {
-            $hit['backend'] = static::$id;
-            $hit['id'] = static::$id . ':' . $hit['dn'];
+            //$hit['backend'] = static::$id;
+            //$hit['id'] = static::$id . ':' . $hit['dn'];
+			//$this->_ldap->errorlog('debug', 'CheckID', static::$id);
 			//$hit[0]['backend'] = static::$id;
             //$hit[0]['id'] = static::$id . ':' . $hit[0]['dn'];
         }
-		//$this->_ldap->errorlog('debug', 'MainSearchHit2', $hit);
+		$this->_ldap->errorlog('debug', 'MainSearchHit2', $hit);
         return ($hit);
     }
     function search($query) {
@@ -495,10 +533,10 @@ class StaffLDAPAuthentication extends StaffAuthenticationBackend
             return array();
         $hits = $this->_ldap->search($query);
 	    foreach ($hits as &$h) {
-            $h['backend'] = static::$id;
-            $h['id'] = static::$id . ':' . $h['dn'];
+           // $h['backend'] = static::$id;
+           // $h['id'] = static::$id . ':' . $h['dn'];
         }
-		//$this->_ldap->errorlog('debug', 'MainSearchHits', $hits);
+		$this->_ldap->errorlog('debug', 'MainSearchHits', $hits);
         return $hits;
     }
 }
@@ -508,17 +546,15 @@ class ClientLDAPAuthentication extends UserAuthenticationBackend {
     function __construct($config) {
         $this->_ldap = new LDAPAuthentication($config, 'client');
         $this->config = $config;
-        if ($domain = $config->get('basedn'))
+        if ($domain = $config->get('domain'))
             self::$name .= sprintf(' (%s)', $domain);
     }
     function getName() {
-	//$this->_ldap->errorlog('debug', 'getName', $this->config);
         $config = $this->config;
         list($__, $_N) = $config::translate();
         return $__(static::$name);
     }
     function authenticate($username, $password=false, $errors=array()) {
-		//$this->_ldap->errorlog('debug', 'authenticateclient', $username);
         $object = $this->_ldap->authenticate($username, $password);
         if ($object instanceof ClientCreateRequest)
             $object->setBackend($this);
