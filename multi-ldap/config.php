@@ -92,11 +92,23 @@ class LdapMultiAuthPluginConfig extends PluginConfig {
                     'desc' => $__('Enable authentication of clients')
                 )
             )),
+            'reg-modes' => new SectionBreakField(array(
+                'label' => $__('Registration Modes'),
+                'hint' => $__('Registration modes for clients and staff
+                    members can be enabled independently'),
+            )),
             'multiauth-force-register' => new BooleanField(array(
                 'label' => $__('Force client registration'),
                 'default' => true,
                 'configuration' => array(
                     'desc' => $__('This is useful if you have public registration disabled')
+                )
+            )),
+            'multiauth-staff-register' => new BooleanField(array(
+                'label' => $__('Enable Staff registration'),
+                'default' => false,
+                'configuration' => array(
+                    'desc' => $__('Useful if you want staff to be registered automatically disabled')
                 )
             )),
             'multiauth-debug' => new SectionBreakField(array(
