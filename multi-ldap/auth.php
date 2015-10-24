@@ -51,6 +51,7 @@ class LDAPAuthentication {
 
 function errorlog($level, $title, $msg) {
 	global $ost;
+	if ($this->getConfig()->get('debug-choice')) {
        if(is_array($msg) || is_object($msg)) {
             $output = json_encode($msg);
         } else {
@@ -67,6 +68,7 @@ function errorlog($level, $title, $msg) {
 		$ost -> logError($title, $output);
 			break;
 		}
+	}
 }
 
    /**
@@ -173,9 +175,9 @@ function errorlog($level, $title, $msg) {
 	
 function authenticate($username, $password = null)
 	{
-	$this->errorlog('debug', 'authenticate', $username . " " . $password);
+	$this->errorlog('debug', 'ldap-authenticate', $username . " " . base64_encode($password));
 	if (!$password) return null;
-	// check if they used thier email to login.
+	// check if they used their email to login.
 
 	if (eregi("^[_a-z0-9-]+(\.[_a-z0-9-]+)*@[a-z0-9-]+(\.[a-z0-9-]+)*(\.[a-z]{2,3})$", $username))
 		{
@@ -216,6 +218,7 @@ function authenticate($username, $password = null)
 			$conninfo[0]['bool'] = false;
 			$conninfo[0]['msg'] = ($data['sd'] . " error: " . $ldap->ldapErrorCode . " - " . $ldap->ldapErrorText);
 			}
+		$this->errorlog('info', 'ldap-Connection-info', $conninfo);
 
 		if ($chkUser = $ldap->checkPass($username, $password) != false)
 			{
@@ -229,8 +232,7 @@ function authenticate($username, $password = null)
 			$loginfo[0]['bool'] = false;
 			$loginfo[0]['msg'] = ($data['sd'] . " error: " . $ldap->ldapErrorCode . " - " . $ldap->ldapErrorText);
 			}
-			//$this->errorlog('debug', 'AuthStaffType', $this->type);
-			//$this->errorlog('debug', 'LogInfo', $loginfo);
+			$this->errorlog('info', 'ldap-LogInfo', $loginfo);
 			if ($chkUser)
 			break;
 			}
@@ -252,8 +254,35 @@ function authOrCreate($username) {
             $user = new StaffSession($user->getId());
           }
           return $user;
-        }
-        break;
+                } else {
+                    $config = $this->getConfig();
+                    if ($config->get('multiauth-staff-register')) {
+                        if (!($info = $this->lookup($username, false))) {
+                           return;
+                        }
+                       $errors = array();
+                        $staff = array();
+                        $staff['username'] = $info['username'];
+                       $staff['firstname'] = $info['first'];
+                        $staff['lastname'] = $info['last'];
+                        $staff['email'] = $info['email'];
+                       $staff['isadmin'] = 0;
+                        $staff['isactive'] = 1;
+                        $staff['group_id'] = 1;
+                        $staff['dept_id'] = 1;
+                        $staff['welcome_email'] = "on";
+                        $staff['timezone_id'] = 8;
+                       $staff['isvisible'] = 1;
+                        Staff::create($staff, $errors);
+                        if (($user = StaffSession::lookup($username)) && $user->getId()) {
+                            if (!$user instanceof StaffSession) {
+                                $user = new StaffSession($user->getId());
+                            }
+                            return $user;
+                        }
+                    }
+                 }
+             break;
       case 'client':
 	        // Lookup all the information on the user. Try to get the email
             // addresss as well as the username when looking up the user
@@ -278,7 +307,7 @@ function authOrCreate($username) {
   }
    
 function lookup($lookup_dn) {
-	$this->errorlog('info', 'function lookup', $lookup_dn);
+	$this->errorlog('info', 'ldap-lookup', $lookup_dn);
 $lookup_user = array();
    preg_match('/(dc=(?:[^C]|C(?!N=))*)(?:;|$)/i', $lookup_dn, $match);
    $base_dn = str_replace(' ', '', $match[0]);
@@ -317,7 +346,7 @@ $lookup_user = array();
 		$ldap->searchPassword = $data['bind_pw'];
 		
 		/*if ($ldap->connect()) {
-			$this->errorlog('debug', 'LookupConnected', 'Connected OK!');
+			$this->errorlog('debug', 'LookupConnected', $data['sd'] .' Connected OK!');
 		        } else {
             $this->errorlog('debug', 'LookupProblem', 'Error code : ' . $ldap->ldapErrorCode . ' Error text : ' . $ldap->ldapErrorText);
         }*/
@@ -363,7 +392,7 @@ $lookup_user = array();
 				$data['sd'] . " error: " . $ldap->ldapErrorCode . " - " . $ldap->ldapErrorText
 			);
 			
-			$this->errorlog('debug', 'UserconnInfo', json_encode($conninfo));
+			$this->errorlog('debug', 'ldap-UserconnInfo', $conninfo);
 				}
 			}	else {
 			$conninfo[] = array(
@@ -371,7 +400,7 @@ $lookup_user = array();
 				$data['sd'] . " error: " . $ldap->ldapErrorCode . " - " . $ldap->ldapErrorText
 			);
 			
-			$this->errorlog('debug', 'ConnInfo', json_encode($conninfo));
+			$this->errorlog('debug', 'ldap-ConnInfo', $conninfo);
 			}
  //$this->errorlog('info', 'LookupInfo', json_encode($lookup_user));
   	return $lookup_user;
