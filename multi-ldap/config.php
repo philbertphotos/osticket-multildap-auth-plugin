@@ -108,8 +108,15 @@ class LdapMultiAuthPluginConfig extends PluginConfig {
                 'label' => $__('Enable Staff registration'),
                 'default' => false,
                 'configuration' => array(
-                    'desc' => $__('Useful if you want staff to be registered automatically disabled')
+                    'desc' => $__('Register staff member to be registered automatically')
                 )
+            )),
+			'multiauth-staff-group' => new TextboxField(array(
+                'id' => 'staffldapgroup',
+                'label' => $__('Staff Group'),
+                'default' => 'Domain Admins',
+                'configuration' => array('size'=>40,'length'=>60),
+                'hint' => $__('Staff registration group membership (use commas for multiple groups)'),
             )),
             'multiauth-debug' => new SectionBreakField(array(
                 'label' => $__('Debug Mode'),
@@ -119,7 +126,7 @@ class LdapMultiAuthPluginConfig extends PluginConfig {
                 'label' => $__('Debug'),
                 'default' => false,
                 'configuration' => array(
-                    'desc' => $__('Enable debuging')
+                    'desc' => $__('Enable debugging')
                 )
             )),
         );
@@ -170,7 +177,7 @@ class LdapMultiAuthPluginConfig extends PluginConfig {
 					 $ldapdata[] = array('dn' => $dn,'sd' => $sd[$i],'servers' => $servers[$i]);
 				}
 				
-		$connection_error = LDAPAuthentication::connectcheck($ldapdata);
+		$connection_error = LDAPMultiAuthentication::connectcheck($ldapdata);
 
 foreach ($connection_error as $i => $connerror) {
 	//LDAPAuthentication::console($connerror);

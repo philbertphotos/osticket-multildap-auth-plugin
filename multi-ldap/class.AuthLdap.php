@@ -26,6 +26,10 @@
  *
  * ChangeLog
  * ---------
+  * version 1.1, 11.16.2015, Joseph Philbert <joe@philbertphotos.com> 
+ * Updated checkGroup for better integration with Active Directory
+ * No correct retrieves AD groups and/or detect if a user is part of a group
+ 
  * version 1.0, 10.13.2015, Joseph Philbert <joe@philbertphotos.com> 
  * Updated functions for better integration with Active Directory
  * Removed several PHP warnings for unset variables
@@ -303,60 +307,68 @@ class AuthLdap {
         }
     }
 
-    // 2.3 Group methods ---------------------------------------------------------
-
     /**
      * 2.3.1 : Checks to see if a user is in a given group. If so, it returns
-     * true, and returns false if the user isn't in the group, or any other
+     * true, and returns false if the $group is null it list all groups the user is in, or any other
      * error occurs (eg:- no such user, no group by that name etc.)
      */
-    function checkGroup ( $uname,$group) {
-        // builds the appropriate dn, based on whether $this->people and/or $this->group is set
-        $checkDn = $this->setDn(false);
-
-        // We need to search for the group in order to get it's entry.
-        $this->result = @ldap_search( $this->connection, $checkDn, "cn=" .$group);
-        $info = @ldap_get_entries( $this->connection, $this->result);
-
-        // Only one entry should be returned(no groups will have the same name)
-        $entry = ldap_first_entry( $this->connection,$this->result);
-
-        if ( !$entry) {
-            $this->ldapErrorCode = ldap_errno( $this->connection);
-            $this->ldapErrorText = ldap_error( $this->connection);
-            return false;  // Couldn't find the group...
-        }
-        // Get all the member DNs
-        if ( !$values = @ldap_get_values( $this->connection, $entry, "uniqueMember")) {
-            $this->ldapErrorCode = ldap_errno( $this->connection);
-            $this->ldapErrorText = ldap_error( $this->connection);
-            return false; // No users in the group
-        }
-
-        foreach ( $values as $key => $value) {
-            /* Loop through all members - see if the uname is there...
-            ** Also check for sub-groups - this allows us to define a group as
-            ** having membership of another group.
-            ** FIXME:- This is pretty ugly code and unoptimised. It takes ages
-            ** to search if you have sub-groups.
-            */
-            list( $cn,$ou) = explode( ",",$value);
-            list( $ou_l,$ou_r) = explode( "=",$ou);
-
-            if ( $this->groups==$ou_r) {
-                list( $cn_l,$cn_r) = explode( "=",$cn);
-                // OK, So we now check the sub-group...
-                if ( $this->checkGroup ( $uname,$cn_r)) {
-                    return true;
-                }
+    function checkGroup($uname, $group=null) {
+        $checkDn = $this->setDn( false);
+            
+            // if the directory is AD, then bind first with the search user first
+            if ($this->serverType == "ActiveDirectory") {
+                $this->authBind($this->searchUser, $this->searchPassword);
             }
 
-            if ( preg_match( "/$uname/i",$value)) {
+        // Search AD
+        $this->result = ldap_search($this->connection, $checkDn, $this->getUserIdentifier()."=$uname",array("memberof","primarygroupid"));
+        $entries = ldap_get_entries($this->connection, $this->result);
+        
+        // No information found, bad user
+        if($entries['count'] == 0) {
+            $this->ldapErrorCode = ldap_errno( $this->connection);
+            $this->ldapErrorText = ldap_error( $this->connection);
+            return false;
+        }
+        
+        // Get groups and primary group token
+        $output = $entries[0]['memberof'];
+        $token = $entries[0]['primarygroupid'][0];
+        
+        // Remove extraneous first entry
+        array_shift($output);
+        
+        // We need to look up the primary group, get list of all groups
+        $allgroups = ldap_search($this->connection, $checkDn,"(objectcategory=group)",array("distinguishedname","primarygrouptoken"));
+        $groups = ldap_get_entries($this->connection, $allgroups);
+        
+        // Remove extraneous first entry
+        array_shift($groups);
+        
+        // Loop through and find group with a matching primary group token
+        foreach($groups as $e) {
+            if($e['primarygrouptoken'][0] == $token) {
+                // Primary group found, add it to output array
+                $output[] = $e['distinguishedname'][0];
+                // Break loop
+                break;
+            }
+        }
+    if ($group){
+          foreach ( $output as $value) {
+            /* Loop through all groups */
+            $cn = ldap_explode_dn($value,0)[0];
+            if(strtolower($cn) == strtolower("cn=".$group)){
                 return true;
-            }
-        }
+            }             
+           } 
+           return false;
+           
+           } else {
+        return $output;
     }
-
+}
+    
     // 2.4 Attribute methods -----------------------------------------------------
     /**
      * 2.4.1 : Returns an array containing a set of attribute values.
@@ -367,11 +379,14 @@ class AuthLdap {
         // builds the appropriate dn, based on whether $this->people and/or $this->group is set
         $checkDn = $this->setDn( true);
         $results[0] = $attribute;
-
+        // if the directory is AD, then bind first with the search user first
+        if ($this->serverType == "ActiveDirectory") {
+            $this->authBind($this->searchUser, $this->searchPassword);
+        }
         // We need to search for this user in order to get their entry.
         $this->result = @ldap_search( $this->connection,$checkDn,$this->getUserIdentifier()."=$uname",$results);
         // Only one entry should ever be returned (no user will have the same uid)
-        $entry = ldap_first_entry( $this->connection, $this->result);
+        @$entry = ldap_first_entry( $this->connection, $this->result);
 
         if ( !$entry) {
             $this->ldapErrorCode = -1;

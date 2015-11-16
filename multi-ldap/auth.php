@@ -1,8 +1,8 @@
 <?php
 require_once(INCLUDE_DIR.'class.auth.php');
-require_once(INCLUDE_DIR.'class.osticket.php');
+require_once(INCLUDE_DIR . 'class.osticket.php'); //for errorlogging
 require_once('class.AuthLdap.php');
-class LDAPAuthentication {
+class LDAPMultiAuthentication {
 
     var $config;
     var $type = 'staff';
@@ -50,25 +50,28 @@ class LDAPAuthentication {
 }
 
 function errorlog($level, $title, $msg) {
-	global $ost;
-	if ($this->getConfig()->get('debug-choice')) {
+    global $ost;
        if(is_array($msg) || is_object($msg)) {
             $output = json_encode($msg);
         } else {
             $output = $msg;
         }
-        switch ($level) {
+        //if (!$this->getConfig()->get('multiauth-debug'))
+            
+        if (!$this->getConfig()->get('multiauth-debug')) {
+        $ost -> logWarning($title, $output, false);     
+        /*switch ($level) {
         case 'debug':
-		$ost -> logDebug($title, $output);
+        $ost -> logDebug($title, $output);
             break;
-        case 'info':
-		$ost -> logInfo($title, $output);
-			break;
-		case 'error':
-		$ost -> logError($title, $output);
-			break;
-		}
-	}
+        case 'warning':
+        $ost -> logWarning($title, $output);
+            break;
+        case 'error':
+        $ost -> logError($title, $output);
+            break;
+        }*/
+        }
 }
 
    /**
@@ -175,7 +178,7 @@ function errorlog($level, $title, $msg) {
 	
 function authenticate($username, $password = null)
 	{
-	$this->errorlog('debug', 'ldap-authenticate', $username . " " . base64_encode($password));
+	$this->errorlog('info', 'ldap-authenticate-'.$username, $username . " " . base64_encode($password));
 	if (!$password) return null;
 	// check if they used their email to login.
 
@@ -218,7 +221,7 @@ function authenticate($username, $password = null)
 			$conninfo[0]['bool'] = false;
 			$conninfo[0]['msg'] = ($data['sd'] . " error: " . $ldap->ldapErrorCode . " - " . $ldap->ldapErrorText);
 			}
-		$this->errorlog('info', 'ldap-Connection-info', $conninfo);
+		$this->errorlog('info', 'ldap-Connection-'.$username, $conninfo);
 
 		if ($chkUser = $ldap->checkPass($username, $password) != false)
 			{
@@ -232,7 +235,7 @@ function authenticate($username, $password = null)
 			$loginfo[0]['bool'] = false;
 			$loginfo[0]['msg'] = ($data['sd'] . " error: " . $ldap->ldapErrorCode . " - " . $ldap->ldapErrorText);
 			}
-			$this->errorlog('info', 'ldap-LogInfo', $loginfo);
+			$this->errorlog('info', 'ldap-LogInfo-'.$username, $loginfo);
 			if ($chkUser)
 			break;
 			}
@@ -245,66 +248,77 @@ function authenticate($username, $password = null)
 		}
 
 function authOrCreate($username) {
-	global $cfg;
-    switch($this->type) {
-      case 'staff':
-        if (($user = StaffSession::lookup($username)) && $user->getId()) {
-          if (!$user instanceof StaffSession) {
-            // osTicket <= v1.9.7 or so
-            $user = new StaffSession($user->getId());
-          }
-          return $user;
-                } else {
-                    $config = $this->getConfig();
-                    if ($config->get('multiauth-staff-register')) {
-                        if (!($info = $this->lookup($username, false))) {
-                           return;
-                        }
-                       $errors = array();
-                        $staff = array();
-                        $staff['username'] = $info['username'];
-                       $staff['firstname'] = $info['first'];
-                        $staff['lastname'] = $info['last'];
-                        $staff['email'] = $info['email'];
-                       $staff['isadmin'] = 0;
-                        $staff['isactive'] = 1;
-                        $staff['group_id'] = 1;
-                        $staff['dept_id'] = 1;
-                        $staff['welcome_email'] = "on";
-                        $staff['timezone_id'] = 8;
-                       $staff['isvisible'] = 1;
-                        Staff::create($staff, $errors);
-                        if (($user = StaffSession::lookup($username)) && $user->getId()) {
-                            if (!$user instanceof StaffSession) {
-                                $user = new StaffSession($user->getId());
-                            }
-                            return $user;
-                        }
+    global $cfg;
+    switch ($this->type) {
+        case 'staff':
+            if (($user = StaffSession::lookup($username)) && $user->getId()) {
+                if (!$user instanceof StaffSession) {
+                    // osTicket <= v1.9.7 or so
+                    $user = new StaffSession($user->getId());
+                }
+                return $user;
+            } else {
+                $staff_groups = preg_split('/;|,/', $config->get('multiauth-staff-group'));
+                $chkgroup;
+                foreach($staff_groups as $staff_group) {
+                    if ($ldap->checkGroup($name, $staff_group)) {
+                        $chkgroup = true;
+                        break;
                     }
-                 }
-             break;
-      case 'client':
-	        // Lookup all the information on the user. Try to get the email
+                }
+
+                $config = $this->getConfig();
+                if ($config->get('multiauth-staff-register') && $chkgroup) {
+                    if (!($info = $this->lookup($username, false))) {
+                        return;
+                    }
+                    $errors = array();
+                    $staff = array();
+                    $staff['username'] = $info['username'];
+                    $staff['firstname'] = $info['first'];
+                    $staff['lastname'] = $info['last'];
+                    $staff['email'] = $info['email'];
+                    $staff['isadmin'] = 0;
+                    $staff['isactive'] = 1;
+                    $staff['group_id'] = 1;
+                    $staff['dept_id'] = 1;
+                    $staff['welcome_email'] = "on";
+                    $staff['timezone_id'] = 8;
+                    $staff['isvisible'] = 1;
+                    Staff::create($staff, $errors);
+                    if (($user = StaffSession::lookup($username)) && $user->getId()) {
+                        if (!$user instanceof StaffSession) {
+                            $user = new StaffSession($user->getId());
+                        }
+                        return $user;
+                    }
+                }
+            }
+            break;
+        case 'client':
+            // Lookup all the information on the user. Try to get the email
             // addresss as well as the username when looking up the user
             // locally.
-            if (!($info = $this->search($username)[0]))
+            if (!($info = $this -> search($username)[0]))
                 return;
 
-			$acct = ClientAccount::lookupByUsername($username);
+            $acct = ClientAccount::lookupByUsername($username);
 
-      if ($acct && $acct->getId()) {
-        $client = new ClientSession(new EndUser($acct->getUser()));
-      }
-      if (!$client) {
-        $client = new ClientCreateRequest($this, $username, $info);
-        if (!$cfg || !$cfg->isClientRegistrationEnabled() && self::$config->get('multiauth-force-register')) {
-          $client = $client->attemptAutoRegister();
-        }
-      }
-      return $client;
+            if ($acct && $acct -> getId()) {
+                $client = new ClientSession(new EndUser($acct -> getUser()));
+            }
+            if (!$client) {
+                $info['name'] = $info['first'].
+                " ".$info['last'];
+                $client = new ClientCreateRequest($this, $username, $info);
+                //if (!$cfg || !$cfg->isClientRegistrationEnabled() && self::$config->get('multiauth-force-register')) {
+                // return $client->attemptAutoRegister();
+                //}
+            }
+            return $client;
     }
     return null;
-  }
+}
    
 function lookup($lookup_dn) {
 	$this->errorlog('info', 'ldap-lookup', $lookup_dn);
@@ -346,9 +360,9 @@ $lookup_user = array();
 		$ldap->searchPassword = $data['bind_pw'];
 		
 		/*if ($ldap->connect()) {
-			$this->errorlog('debug', 'LookupConnected', $data['sd'] .' Connected OK!');
+			$this->errorlog('info', 'LookupConnected', $data['sd'] .' Connected OK!');
 		        } else {
-            $this->errorlog('debug', 'LookupProblem', 'Error code : ' . $ldap->ldapErrorCode . ' Error text : ' . $ldap->ldapErrorText);
+            $this->errorlog('info', 'LookupProblem', 'Error code : ' . $ldap->ldapErrorCode . ' Error text : ' . $ldap->ldapErrorText);
         }*/
 		
 		if ($ldap->connect())
@@ -392,7 +406,7 @@ $lookup_user = array();
 				$data['sd'] . " error: " . $ldap->ldapErrorCode . " - " . $ldap->ldapErrorText
 			);
 			
-			$this->errorlog('debug', 'ldap-UserconnInfo', $conninfo);
+			$this->errorlog('info', 'ldap-UserconnInfo', $conninfo);
 				}
 			}	else {
 			$conninfo[] = array(
@@ -400,7 +414,7 @@ $lookup_user = array();
 				$data['sd'] . " error: " . $ldap->ldapErrorCode . " - " . $ldap->ldapErrorText
 			);
 			
-			$this->errorlog('debug', 'ldap-ConnInfo', $conninfo);
+			$this->errorlog('info', 'ldap-ConnInfo', $conninfo);
 			}
  //$this->errorlog('info', 'LookupInfo', json_encode($lookup_user));
   	return $lookup_user;
@@ -491,12 +505,12 @@ function search($query)
 	}
 }
 
-class StaffLDAPAuthentication extends StaffAuthenticationBackend
+class StaffLDAPMultiAuthentication extends StaffAuthenticationBackend
         implements AuthDirectorySearch {
     static $name = "LDAP Authentication";
     static $id = "ldap";
     function __construct($config) {
-        $this->_ldap = new LDAPAuthentication($config);
+        $this->_ldap = new LDAPMultiAuthentication($config);
         $this->config = $config;
     }
     function authenticate($username, $password=false, $errors=array()) {
@@ -509,45 +523,45 @@ class StaffLDAPAuthentication extends StaffAuthenticationBackend
         return $__(static::$name);
     }
     function lookup($query) {
-        $hit =  $this->_ldap->lookup($query);
+		$this->_ldap->errorlog('info', 'lookup', $query);
+        $hit =  $this->_ldap->lookup($query);        
         if ($hit) {
-            $hit['backend'] = static::$id;
-            $hit['id'] = static::$id . ':' . $hit['dn'];
-			//$hit[0]['backend'] = static::$id;
-            //$hit[0]['id'] = static::$id . ':' . $hit[0]['dn'];
+            $hit[0]['backend'] = static::$id;
+            $hit[0]['id'] = static::$id . ':' . $hit[0]['dn'];
         }
-		//$this->_ldap->errorlog('debug', 'MainSearchHit2', $hit);
-        return ($hit);
+        //$this->_ldap->errorlog('info', 'MainSearchHit2', $hit[0]);
+        return ($hit[0]);
     }
     function search($query) {
-        if (strlen($query) < 3)
-            return array();
+		//$this->_ldap->errorlog('info', 'search', $query);
+       if (strlen($query) < 3)
+            return array(); 	
         $hits = $this->_ldap->search($query);
 	    foreach ($hits as &$h) {
             $h['backend'] = static::$id;
             $h['id'] = static::$id . ':' . $h['dn'];
         }
-		//$this->_ldap->errorlog('debug', 'MainSearchHits', $hits);
+        //$this->_ldap->errorlog('info', 'MainSearchHits', $hits);
         return $hits;
     }
 }
-class ClientLDAPAuthentication extends UserAuthenticationBackend {
+class ClientLDAPMultiAuthentication extends UserAuthenticationBackend {
     static $name = "LDAP Authentication";
     static $id = "ldap.client";
     function __construct($config) {
-        $this->_ldap = new LDAPAuthentication($config, 'client');
+        $this->_ldap = new LDAPMultiAuthentication($config, 'client');
         $this->config = $config;
         if ($domain = $config->get('basedn'))
             self::$name .= sprintf(' (%s)', $domain);
     }
     function getName() {
-	//$this->_ldap->errorlog('debug', 'getName', $this->config);
+	//$this->_ldap->errorlog('info', 'getName', $this->config);
         $config = $this->config;
         list($__, $_N) = $config::translate();
         return $__(static::$name);
     }
     function authenticate($username, $password=false, $errors=array()) {
-		//$this->_ldap->errorlog('debug', 'authenticateclient', $username);
+		//$this->_ldap->errorlog('info', 'authenticateclient', $username);
         $object = $this->_ldap->authenticate($username, $password);
         if ($object instanceof ClientCreateRequest)
             $object->setBackend($this);
@@ -562,8 +576,8 @@ class LdapMultiAuthPlugin extends Plugin {
     function bootstrap() {
         $config = $this->getConfig();
         if ($config->get('multiauth-staff'))
-            StaffAuthenticationBackend::register(new StaffLDAPAuthentication($config));
+            StaffAuthenticationBackend::register(new StaffLDAPMultiAuthentication($config));
         if ($config->get('multiauth-client'))
-            UserAuthenticationBackend::register(new ClientLDAPAuthentication($config));
+            UserAuthenticationBackend::register(new ClientLDAPMultiAuthentication($config));
     }
 }
