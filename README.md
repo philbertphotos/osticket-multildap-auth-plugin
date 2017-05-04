@@ -1,6 +1,6 @@
 #Multiple Domain LDAP Authentication for osTicket
 =====================================
-Plugin for OS Ticket that allows for authentication with multiple domains for agents and/or clients on osTicket.
+Plugin for OS Ticket that allows for authentication with multiple domains for agents and/or clients on osTicket. Syncs users in LDAP via schedule.
 
 Features
 ========
@@ -8,6 +8,9 @@ Features
  - SSL connection support.
  - Login for both agents and clients (can be toggled for neither, either, or both).
  - Searchs and combines users in both domains into one
+ - Creates user accounts and syncs information as needed.
+ - Sync accounts in LDAP with user defined schedule.
+ - Maps Ldap attributes 
  ![Alt text](http://osticket.com/forum/uploads/FileUpload/08/6bb40e0ef6b5739ec010c9f1391a68.png "User lookup")
 
 Installing
@@ -27,8 +30,6 @@ see image below
 Roadmap
 ==========
 Planning on adding a TAB feature to make setting section easier to manage.
-Auto create users.
-
 ### From source
 
 to be updated.........
