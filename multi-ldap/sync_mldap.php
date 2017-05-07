@@ -8,19 +8,42 @@
 			//global $config;
 			$config = LdapMultiAuthPlugin::getConfig();
             $userlist          = array();
-            $ldapinfo          = LDAPMultiAuthentication::ldapinfo();
+	        $ldapinfo;
+			foreach (preg_split('/;/', $config->get('basedn')) as $i => $dn)
+			{
+				$dn = trim($dn);
+				$servers = $config->get('servers');
+				$serversa = preg_split('/\s+/', $servers);
+
+				$sd = $config->get('shortdomain');
+				$sda = preg_split('/;|,/', $sd);
+
+				$bind_dn = $config->get('bind_dn');
+				$bind_dna = preg_split('/;/', $bind_dn) [$i];
+
+				$bind_pw = $config->get('bind_pw');
+				$bind_pwa = preg_split('/;|,/', $bind_pw) [$i];
+
+				$ldapinfo[] = array(
+					'dn' => $dn,
+					'sd' => $sda[$i],
+					'servers' => trim($serversa[$i]) ,
+					'bind_dn' => trim($bind_dna) ,
+					'bind_pw' => trim($bind_pwa)
+				);
+			}
             $combined_userlist = array();
 			
             foreach ($ldapinfo as $data) {
                 $ldap                 = new AuthLdap();
                 $ldap->serverType     = 'ActiveDirectory';
-                $ldap->server         =  $data['servers'];
+                $ldap->server 		  = preg_split('/;|,/', $data['servers']);
                 $ldap->dn             = $data['dn'];
                 $ldap->searchUser     = $data['bind_dn'];
                 $ldap->searchPassword = $data['bind_pw'];
 
                 if ($ldap->connect()) {
-                    $attr = str_getcsv(strtolower("givenname,sn,whenchanged,useraccountcontrol,objectguid," . $config->get('sync_attr')), ',');
+                    $attr = str_getcsv(strtolower("samaccountname,mail,givenname,sn,whenchanged,useraccountcontrol,objectguid," . $config->get('sync_attr')), ',');
 
                     if ($userlist = $ldap->getUsers('', $attr, $config->get('sync_filter'))) {
                         $combined_userlist = array_merge($combined_userlist, $userlist);
@@ -307,7 +330,7 @@
 								$result = db_query($update_ostuser_sql);
 								if (!$result){
 									$log_report['status'] .= " (Field Write Error[$ost_contact_field])";
-									error_log ($ost_contact_field ." : ". $update_ostuser_sql);
+									//error_log ($ost_contact_field ." : ". $update_ostuser_sql);
 									$changed_attr = NULL;
 									continue;
 								}
