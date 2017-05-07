@@ -1,6 +1,7 @@
 <?php
 require_once(INCLUDE_DIR.'class.plugin.php');
 require_once(INCLUDE_DIR.'class.forms.php');
+
 class LdapMultiAuthPluginConfig extends PluginConfig {
 
     function translate() {
@@ -13,14 +14,81 @@ class LdapMultiAuthPluginConfig extends PluginConfig {
         return Plugin::translate('multiauth');
     }
 	
+		function pluginpath() {	
+		$id = substr($this->section, -1);
+		$plugin_path;
+		$sql = "SELECT `install_path` FROM ".TABLE_PREFIX."plugin WHERE `id` = ".$id.";";
+        $result = db_query($sql);
+		//echo $sql;
+        while($row = db_fetch_array($result)) {
+			$plugin_path = $row['install_path'];
+        }
+		return 'include/'.$plugin_path;
+		}
+		
+		function getschedule(){
+			$sync_val = json_decode($this->config['sync_data']->ht['value']);
+			$time_zone = db_result(db_query("SELECT value FROM `".TABLE_PREFIX."config` WHERE `key` = 'default_timezone'"));
+			$scheduletime = LdapMultiAuthPlugin::DateFromTimezone(strftime("%Y-%m-%d %H:%M", $sync_val->schedule),'UTC', $time_zone,'F d Y g:i a');
+			//echo json_encode($this->config['sync_data']);
+			return $scheduletime;
+		}
+		
+		function checkschedule(){
+			$current_schedule = $this->config['sync_schedule']->ht['value'];
+			$new_schedule = $this->getForm()->getField('sync_schedule')->getValue();
+				
+			if ($current_schedule != $new_schedule) {
+			 $id = substr($this->section, -1);
+			$json_str = db_fetch_row(db_query('SELECT value FROM ' . TABLE_PREFIX . 'config 
+						WHERE namespace = "plugin.' .  $id . '" AND `key` = "sync_data";'))[0];
+				$json_arr = json_decode($json_str);
+				$key = 'schedule';
+				$json_arr->$key = strtotime($new_schedule);
+					$sql = 'UPDATE `' . TABLE_PREFIX . 'config` SET `value` = \'' . json_encode($json_arr) .'\', updated = CURRENT_TIMESTAMP
+							WHERE `key` = "sync_data" AND `namespace` = "plugin.' .  $id . '";';
+				return db_query($sql);
+					}
+				return false;
+		}
+    //List osticket email accounts
+	function FromMail() {
+		$frommail = array();
+	    $sql='SELECT email_id,email,name,smtp_active FROM '.EMAIL_TABLE.' email ORDER by name';
+        if(($res=db_query($sql)) && db_num_rows($res)){
+            while(list($id,$email,$name,$smtp)=db_fetch_row($res)){
+                //$selected=($info['email_id'] && $id==$info['email_id'])?'selected="selected"':'';
+                if($name)
+                    $email=Format::htmlchars("$name <$email>");
+                if($smtp)
+                    $email.=' ('.__('SMTP').')';
+				$frommail[] = $id = $email;
+            }
+			return $frommail;
+        }
+	}
+	
     function getOptions() {
+		global $ost;
+		$from_choices = $this->FromMail();
         list($__, $_N) = self::translate();
         return array(
+					'javascript' => new FreeTextField(array(
+                'configuration' => array(
+                    'content' => __('
+		<script type="text/javascript">		
+            $(function() {
+				$("#_sync_data").parent().parent().hide();
+            });
+			</script>')
+                )
+            )),
             'msad' => new SectionBreakField(array(
                 'label' => 'LDAP Information',
                 'hint' => $__('Enter all required for LDAP settings'),
             )),
             'basedn' => new TextareaField(array(
+			    'id' => 'base',
                 'label' => $__('BaseDN'),
                 'hint' => $__('The base DN (e.g. "dc=foo,dc=com")'),
                 'configuration' => array('html'=>false, 'rows'=>2, 'cols'=>40),
@@ -118,6 +186,110 @@ class LdapMultiAuthPluginConfig extends PluginConfig {
                 'configuration' => array('size'=>40,'length'=>60),
                 'hint' => $__('Staff registration group membership (use commas for multiple groups)'),
             )),
+            'multiauth-sync' => new SectionBreakField(array(
+                'label' => $__('Sync Mode'),
+                'hint' => $__('Various options for syncing users with LDAP'),
+            )),
+            'sync-users' => new BooleanField(array(
+                'label' => $__('Sync Users'),
+                'default' => false,
+                'configuration' => array(
+                'desc' => $__('Enable user synchronization')
+                )
+            )),
+			'sync-agents' => new BooleanField(array(
+                'label' => $__('Sync Agents'),
+                'default' => false,
+                'configuration' => array(
+                'desc' => $__('Enable agent synchronization')
+                )
+            )),
+			'sync_schedule' => new TextboxField(array(
+                'id' => 'sync_schedule',
+                'label' => $__('Sync Schedule'),
+                'hint' => $__('Set the schedule to sync users'),
+                'default' => '1 day 12AM',
+                'configuration' => array('size'=>40,'length'=>40),
+                'hint' => $__('Set schedule based on string examples: "+10 minutes", "+1 hour", "+1 day", 
+				"next Thursday", "+1 week", "weekdays 1AM", "+2 weekends", "+2 days", "4 hours", "10 September 2000"'),
+            )),			
+			'sync_schedule_show' => new SectionBreakField(array(
+                'label' => $__('Next schedule: ' . $this->getschedule()),
+            )),
+            'sync_reports' => new BooleanField(array(
+                'label' => $__('Enable Sync Reports'),
+                'default' => false,
+                'configuration' => array(
+                    'hint' => $__('Enable reports to be emailed')
+                )
+            )),			
+				'sync_mailfrom' => new ChoiceField(array(
+                'id'    => 'sync_mailfrom',
+                'label' => 'From email address',
+				'default' => 1,
+                'choices' => $from_choices,
+                'configuration' => array(
+                'hint' => 'This list the internal email accounts choose one that fits best.')  
+            )),
+			'sync_mailto' => new TextboxField(array(
+                'id'    => 'sync_mailto',
+                'label' => 'Report address',
+				'default' => '',
+                'hint' => 'Email address that reports will be sent to',
+				'configuration' => array('size'=>30,'length'=>30),				
+            )),
+				'sync_attr' => new TextareaField(array(				
+                'label' => $__('LDAP Attributes'),
+                'hint' => $__('List the LDAP attributes to use" '),
+				'default' => 'samaccountname, telephonenumber,physicalDeliveryOfficeName',
+                'configuration' => array('html'=>false, 'rows'=>2, 'cols'=>70),
+            )),		            
+				'sync_map' => new TextareaField(array(
+                'label' => $__('Sync Map'),
+                'hint' => $__('Map contact varribles to LDAP attributes example: <br>"<strong>name:cn, phone:telephonenumber</strong>" '),
+				'default' => 'name:cn, phone:telephonenumber',
+                'configuration' => array('html'=>false, 'rows'=>2, 'cols'=>70),
+            )),
+				'sync_filter' => new TextboxField(array(	
+                'label' => $__('LDAP Sync Filter'),
+                'hint' => $__('Custom Filtering for syncing users'),
+				'default' => '(&(sAMAccountType=805306368)(mail=*))',
+				'configuration' => array('size'=>70,'length'=>150),
+            )),	
+
+			'sync_btn' => new FreeTextField(array(
+                'configuration' => array(
+                    'content' => __('
+		<script type="text/javascript">		
+            $(function() {
+    		$(".sync").click(function() {
+        $.ajax({ //Send the val to php file using Ajax in POST method
+            type: "POST",
+            data: {data: "'.$this->section.'"},
+            url: "'. OST_ROOT .'/scp/sync_mldap.php?ajax=true",
+            success: function(data) { // Get the result and assign to each cases
+                console.log(data);
+                var json = $.parseJSON(data);
+            }
+        });
+    });
+});
+			</script>
+<div class="sync button">sync users <i class="icon-refresh"></i></div>')
+					//icon-spin
+                )
+            )),
+				'sync_data' => new TextboxField(array(
+                'id' => 'sync_data',
+				'label' => $__('Sync Lastrun'),
+                'configuration' => array('size'=>40,'length'=>20,'visibility' => false),
+            )),
+			'sync_full' => new BooleanField(array(	
+                'label' => $__('Full Sync'),
+                'hint' => $__('This does a full sync on the next scheduled time (this happens only once)'),
+				'configuration' => array(
+                    'desc' => $__('Check this to do a Full Sync'))
+            )),		
             'multiauth-debug' => new SectionBreakField(array(
                 'label' => $__('Debug Mode'),
                 'hint' => $__('Turns debugging on or off check the "System Logs" for entires'),
@@ -165,7 +337,8 @@ class LdapMultiAuthPluginConfig extends PluginConfig {
 				}
             }
         }
-		
+		$this->checkschedule();
+
 		$ldapdata = array();
                  foreach (preg_split('/\n/', $config['basedn']) as $i => $dn) {
 					$dn = trim($dn);                   
