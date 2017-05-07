@@ -1,4 +1,4 @@
-#Multiple Domain LDAP Authentication for osTicket
+#Multiple Domain LDAP Authentication and Syncing for osTicket
 =====================================
 Plugin for OS Ticket that allows for authentication with multiple domains for agents and/or clients on osTicket. Syncs users in LDAP via schedule.
 
