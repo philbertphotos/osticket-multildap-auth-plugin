@@ -241,7 +241,7 @@ class LdapMultiAuthPluginConfig extends PluginConfig {
 				'sync_attr' => new TextareaField(array(				
                 'label' => $__('LDAP Attributes'),
                 'hint' => $__('List the LDAP attributes to use" '),
-				'default' => 'samaccountname, telephonenumber,physicalDeliveryOfficeName',
+				'default' => 'cn,telephonenumber,physicalDeliveryOfficeName',
                 'configuration' => array('html'=>false, 'rows'=>2, 'cols'=>70),
             )),		            
 				'sync_map' => new TextareaField(array(
