@@ -28,6 +28,7 @@ class LdapMultiAuthPlugin extends Plugin {
 			$this->configureUpgrade();
 		}
 		//$this->checkmultiDB();
+
 		$this->loadSync();
 		$config = $this->getConfig();
 		Signal::connect('cron', array(
@@ -59,7 +60,6 @@ class LdapMultiAuthPlugin extends Plugin {
 	}
 
 	function onCronProcessed($entry) {
-		$config = $this->getConfig();
 		$this->time_zone = db_result(db_query("SELECT value FROM `" . TABLE_PREFIX . "config` WHERE `key` = 'default_timezone'"));
 
 		$sync_info = db_fetch_row(db_query('SELECT value FROM ' . TABLE_PREFIX . 'config 
@@ -72,17 +72,18 @@ class LdapMultiAuthPlugin extends Plugin {
 		$date = new DateTime('now', new DateTimeZone($this->time_zone));
 
 		$this->crontime = $this->millisecsBetween($schedule, $lastrun, false) / 1000 / 60;
-
 		//$this->logger('warning', 'lastrunY', $lastrun);
-		//$this->logger('warning', 'cronmilli', $crontime);
 		$this->sync_cron($this->crontime);
+			include_once (OST_ROOT . '/scp/sync_mldap.php');
+			$sync = new SyncLDAPMultiClass($this->id);
+			//$this->logger('warning', 'Sync Config', $sync->config);
 
 		if ($this->allowAction()) {
-			if ($config->get('sync-users') || $config->get('sync-agents')) {
+			if ($this->getConfig()->get('sync-users') || $this->getConfig()->get('sync-agents')) {
 				$excu = $this->DateFromTimezone(strftime("%Y-%m-%d %H:%M", $this->lastExec) , 'UTC', $this->time_zone, 'F d Y g:i a');
 				$nextexcu = $this->DateFromTimezone(strftime("%Y-%m-%d %H:%M", $this->nextExec) , 'UTC', $this->time_zone, 'F d Y g:i a');
 
-				include_once (OST_ROOT . '/scp/sync_mldap.php');
+
 				if (function_exists('update_users')) {
 					// my_function is defined
 					//	$this->logger('warning', 'SyncLDAPMultiClass', "Exist");
@@ -93,10 +94,10 @@ class LdapMultiAuthPlugin extends Plugin {
 					
 				}
 
-				$results = check_users();
-				//$this->logger('warning', 'results', json_encode($results));
+				$results = $sync->check_users();
+				$this->logger('warning', 'results', json_encode($results));
 				if (empty($results)) {
-					$this->logger('warning', 'LDAP Sync', 'Sync executed on (' . ($excu) . ') next execution in (' . $nextexcu . ')');
+					//$this->logger('warning', 'LDAP Sync', 'Sync executed on (' . ($excu) . ') next execution in (' . $nextexcu . ')');
 				}
 				else {
 					$this->logger('warning', 'LDAP Sync', 'Sync executed on (' . ($excu) . ') next execution in (' . $nextexcu . ')' . "Total ldapusers: (" . $results['totalldap'] . ") Total agents: (" . $results['totalagents'] . ") Total Updated Users: (" . $results['updatedusers'] . ") Execute Time: (" . $results['executetime'] . ")");
@@ -214,8 +215,8 @@ class LdapMultiAuthPlugin extends Plugin {
 	 *
 	 */
 	function logger($priority, $title, $message, $alert = false, $force = false) {
-		if (!empty($this->getConfig()
-			->get('debug-choice')) && $this->getConfig()
+		if (!empty(self::getConfig()
+			->get('debug-choice')) && self::getConfig()
 			->get('debug-choice')) {
 			if (is_array($message) || is_object($message)) {
 				$message = json_encode($message);
@@ -600,7 +601,7 @@ class LDAPMultiAuthentication {
 					return $user;
 				}
 				else {
-					$staff_groups = preg_split('/;|,/', $config->get('multiauth-staff-group'));
+					$staff_groups = preg_split('/;|,/', $this->config->get('multiauth-staff-group'));
 					$chkgroup;
 					foreach ($staff_groups as $staff_group) {
 						if ($ldap->checkGroup($name, $staff_group)) {
@@ -608,8 +609,7 @@ class LDAPMultiAuthentication {
 							break;
 						}
 					}
-
-					$config = $this->getConfig();
+					
 					if ($config->get('multiauth-staff-register') && $chkgroup) {
 						if (!($info = $this->search($username, false))) {
 							return;
