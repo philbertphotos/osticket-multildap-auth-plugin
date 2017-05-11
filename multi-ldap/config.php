@@ -55,7 +55,8 @@ class LdapMultiAuthPluginConfig extends PluginConfig {
 			$json_arr = json_decode($json_str);
 			$key = 'schedule';
 			$json_arr->$key = strtotime($new_schedule);
-			$sql = 'UPDATE `' . TABLE_PREFIX . 'config` SET `value` = \'' . json_encode($json_arr) . '\', updated = CURRENT_TIMESTAMP
+			//$sql = 'UPDATE `' . TABLE_PREFIX . 'config` SET `value` = \'' . json_encode($json_arr) . '\', updated = CURRENT_TIMESTAMP
+			$sql = 'UPDATE `' . TABLE_PREFIX . 'config` SET `value` = \'\', updated = CURRENT_TIMESTAMP
 							WHERE `key` = "sync_data" AND `namespace` = "plugin.' . $id . '";';
 			return db_query($sql);
 		}
@@ -93,12 +94,12 @@ class LdapMultiAuthPluginConfig extends PluginConfig {
 			)) ,
 			'msad' => new SectionBreakField(array(
 				'label' => 'LDAP Information',
-				'hint' => $__('Enter all required for LDAP settings') ,
+				'hint' => $__('Enter all required for LDAP settings /.../ use semicolons to seperate values') ,
 			)) ,
 			'basedn' => new TextareaField(array(
 				'id' => 'base',
 				'label' => $__('BaseDN') ,
-				'hint' => $__('The base DN (e.g. "dc=foo,dc=com")') ,
+				'hint' => $__('The base DN (e.g. "dc=foo,dc=com;dc=doo,dc=com;")') ,
 				'configuration' => array(
 					'html' => false,
 					'rows' => 2,
@@ -122,7 +123,7 @@ class LdapMultiAuthPluginConfig extends PluginConfig {
 					'size' => 40,
 					'length' => 60
 				) ,
-				'hint' => $__('Use your netbios domain seperated by "," FOO,DOO') ,
+				'hint' => $__('Use your netbios domain seperated by "," FOO;DOO') ,
 			)) ,
 			'servers' => new TextareaField(array(
 				'id' => 'servers',
@@ -132,7 +133,7 @@ class LdapMultiAuthPluginConfig extends PluginConfig {
 					'rows' => 2,
 					'cols' => 40
 				) ,
-				'hint' => $__('Use "server" or "server:port". Place one server entry per line') ,
+				'hint' => $__('Use "server" or "server:port". Type server seperated by a ";" and carragie return for next entry of LDAP servers') ,
 			)) ,
 			'tls' => new BooleanField(array(
 				'id' => 'tls',
@@ -218,7 +219,7 @@ class LdapMultiAuthPluginConfig extends PluginConfig {
 					'size' => 40,
 					'length' => 60
 				) ,
-				'hint' => $__('Staff registration group membership (use commas for multiple groups)') ,
+				'hint' => $__('Staff registration group membership (use semicolons for multiple groups)') ,
 			)) ,
 			'multiauth-sync' => new SectionBreakField(array(
 				'label' => $__('Sync Mode') ,
@@ -254,6 +255,7 @@ class LdapMultiAuthPluginConfig extends PluginConfig {
 				'label' => $__('Next schedule: ' . $this->getschedule()) ,
 			)) ,
 			'sync_reports' => new BooleanField(array(
+				'id' => 'sync_reports',
 				'label' => $__('Enable Sync Reports') ,
 				'default' => false,
 				'configuration' => array(
@@ -291,7 +293,7 @@ class LdapMultiAuthPluginConfig extends PluginConfig {
 			)) ,
 			'sync_map' => new TextareaField(array(
 				'label' => $__('Sync Map') ,
-				'hint' => $__('Map contact varribles to LDAP attributes example: <br>"<strong>name:cn, phone:telephonenumber</strong>" ') ,
+				'hint' => $__('Map contact variables to LDAP attributes example: <br>"<strong>name:cn, phone:telephonenumber</strong>" ') ,
 				'default' => 'name:cn, phone:telephonenumber',
 				'configuration' => array(
 					'html' => false,
