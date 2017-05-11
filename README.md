@@ -10,10 +10,12 @@ Features
  - Combines users in all domains into one for seamless searches.
  - Creates user accounts and syncs information as needed.
  - Sync accounts in LDAP with user defined schedule.
+ - Disables or Enables Osticket users based on LDAP
  - Syncs all attributes only on users that have change via AD time and date.
  - Custom defined ldap map attributes 
  - Keeps track of updated users
  - Schedule is activated based on the cron job
+ 
  ![Alt text](http://osticket.com/forum/uploads/FileUpload/08/6bb40e0ef6b5739ec010c9f1391a68.png "User lookup")
 
 Installing
