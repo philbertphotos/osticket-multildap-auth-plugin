@@ -27,7 +27,7 @@ Configuration
 =============
 It is pretty stright forward just when adding the second domain make user you put a "," or ";" where needed.
 see image below
-![Alt text](http://osticket.com/forum/uploads/FileUpload/29/e87dda088e77d2bd497f22b82989e7.png "Config Page")
+![Alt text](http://osticket.com/forum/uploads/FileUpload/25/721454d41a5d02335570dc6db6eb59.png "Config Page")
 
 
 Roadmap
