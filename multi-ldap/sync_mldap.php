@@ -356,7 +356,7 @@ class SyncLDAPMultiClass extends LDAPMultiAuthentication {
 		// Check if agents shall be updated with LDAP info
 		if ($this->config['sync-agents']) {
 			// Select all osTicket Agents
-			$qry_ostagents = "SELECT staff.username, " . TABLE_PREFIX . "staff.email, " . TABLE_PREFIX . "staff.phone, " . TABLE_PREFIX . "staff.phone_ext as ext, " . TABLE_PREFIX . "staff.mobile FROM " . TABLE_PREFIX . "staff WHERE " . TABLE_PREFIX . "staff.username IS NOT NULL";
+			$qry_ostagents = "SELECT susername, " . "email, "  . "phone, " . "phone_ext as ext, " . "mobile FROM " . TABLE_PREFIX . "staff WHERE " . "username IS NOT NULL";
 
 			$res_ostagents = db_query($qry_ostagents);
 
