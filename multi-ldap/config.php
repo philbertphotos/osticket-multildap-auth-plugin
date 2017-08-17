@@ -167,7 +167,8 @@ class LdapMultiAuthPluginConfig extends PluginConfig {
 			)) ,
 			'search_base' => new TextboxField(array(
 				'label' => $__('Search Filter') ,
-				'hint' => $__('Filter used when searching for users') ,
+				'hint' => $__('Filter used when searching for users "{q}" is replaced by the user input') ,
+				'default' = > '(&(objectCategory=person)(objectClass=user)(|(sAMAccountName={q}*)(firstName={q}*)(lastName={q}*)(displayName={q}*)))'
 				'configuration' => array(
 					'size' => 70,
 					'length' => 120
