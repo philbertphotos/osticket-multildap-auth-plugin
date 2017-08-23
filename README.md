@@ -35,6 +35,7 @@ see image below
 Roadmap
 ==========
 Planning on adding a TAB feature to make setting section easier to manage.
+Ldap Query caching.
 ### From source
 
 to be updated.........
