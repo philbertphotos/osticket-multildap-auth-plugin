@@ -477,8 +477,11 @@ class AuthLdap {
 		}
 		
         $this->result = @ldap_search( $this->connection, $checkDn, $filter, $attributeArray,0,0);
-		if (empty($this->result)) 
+		if (empty($this->result)) {
+			$this->ldapErrorCode = 0;
+            $this->ldapErrorText = "(" . ldap_error($this->connection).") No users found matching search criteria ".$search;
 			return false;
+		}
 		
         $info = @ldap_get_entries( $this->connection, $this->result);
         for( $i = 0; $i < $info["count"]; $i++) {
@@ -510,7 +513,7 @@ class AuthLdap {
             ** were no results returned (array is empty) - so just return false.
             */
             $this->ldapErrorCode = -1;
-            $this->ldapErrorText = "No users found matching search criteria ".$search;
+            $this->ldapErrorText = "(" . ldap_error($this->connection).") No users found matching search criteria ".$search;
             return false;
         }
         return $userslist;
