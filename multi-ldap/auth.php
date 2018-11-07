@@ -8,12 +8,12 @@ define('ospath', str_replace('scp/plugins.php', '', $_SERVER['PHP_SELF']));
 define('MULTI_PLUGIN_VERSION', '1.2');
 
 //FOLDERS
-define('OST_WEB_ROOT', osTicket::get_root_path(__DIR__));
-define('OST_ROOT', INCLUDE_DIR . '../');
-define('MULTI_PLUGIN_ROOT', __DIR__ . '/');
+define( 'OST_WEB_ROOT', osTicket::get_root_path(__DIR__));
+define( 'PLUGINS_ROOT', $_SERVER["DOCUMENT_ROOT"] . OST_WEB_ROOT . 'plugins/' );
+define( 'MULTI_PLUGIN_ROOT', __DIR__ . '/');
 
 require_once ('config.php');
-//include_once (OST_ROOT.'/scp/sync_mldap.php');
+
 class LdapMultiAuthPlugin extends Plugin {
 	var $config_class = 'LdapMultiAuthPluginConfig';
 	var $crontime;
@@ -27,9 +27,9 @@ class LdapMultiAuthPlugin extends Plugin {
 		else if ($this->needUpgrade()) {
 			$this->configureUpgrade();
 		}
-		//$this->checkmultiDB();
-
+		
 		$this->loadSync();
+		
 		$config = $this->getConfig();
 		Signal::connect('cron', array(
 			$this,
@@ -37,15 +37,6 @@ class LdapMultiAuthPlugin extends Plugin {
 		));
 		if ($config->get('multiauth-staff')) StaffAuthenticationBackend::register(new StaffLDAPMultiAuthentication($config));
 		if ($config->get('multiauth-client')) UserAuthenticationBackend::register(new ClientLDAPMultiAuthentication($config));
-	}
-
-	function loadSync() {
-		$sql = 'SELECT FROM ' . PLUGIN_TABLE . 'WHERE isactive=1 AND id=' . db_input($this->getId());
-		$name = MULTI_PLUGIN_ROOT . 'sync_mldap.php';
-		if (db_num_rows(db_query($sql))) {
-			if (!file_exists('scp/sync_mldap.php') || (filemtime($name) != @filemtime('scp/sync_mldap.php'))) copy($name, OST_ROOT . '/scp/sync_mldap.php');
-			include_once (OST_ROOT . '/scp/sync_mldap.php');
-		}
 	}
 
 	function millisecsBetween($dateOne, $dateTwo, $abs = true) {
@@ -59,7 +50,7 @@ class LdapMultiAuthPlugin extends Plugin {
 		return $date->format($format);
 	}
 
-	function onCronProcessed($entry) {
+	function onCronProcessed() {
 		$this->time_zone = db_result(db_query("SELECT value FROM `" . TABLE_PREFIX . "config` WHERE `key` = 'default_timezone'"));
 
 		$sync_info = db_fetch_row(db_query('SELECT value FROM ' . TABLE_PREFIX . 'config 
@@ -72,9 +63,9 @@ class LdapMultiAuthPlugin extends Plugin {
 		$date = new DateTime('now', new DateTimeZone($this->time_zone));
 
 		$this->crontime = $this->millisecsBetween($schedule, $lastrun, false) / 1000 / 60;
-		//$this->logger('warning', 'lastrunY', $lastrun);
+		
 		$this->sync_cron($this->crontime);
-			include_once (OST_ROOT . '/scp/sync_mldap.php');
+			include_once (INCLUDE_DIR . '/scp/sync_mldap.php');
 			$sync = new SyncLDAPMultiClass($this->id);
 			//$this->logger('warning', 'Sync Config', $sync->config);
 
@@ -83,21 +74,10 @@ class LdapMultiAuthPlugin extends Plugin {
 				$excu = $this->DateFromTimezone(strftime("%Y-%m-%d %H:%M", $this->lastExec) , 'UTC', $this->time_zone, 'F d Y g:i a');
 				$nextexcu = $this->DateFromTimezone(strftime("%Y-%m-%d %H:%M", $this->nextExec) , 'UTC', $this->time_zone, 'F d Y g:i a');
 
-
-				if (function_exists('update_users')) {
-					// my_function is defined
-					//	$this->logger('warning', 'SyncLDAPMultiClass', "Exist");
-					
-				}
-				else {
-					//	$this->logger('warning', 'SyncLDAPMultiClass', "NotExist");
-					
-				}
-
 				$results = $sync->check_users();
-				$this->logger('warning', 'results', json_encode($results));
+				//$this->logger('warning', 'results', json_encode($results));
 				if (empty($results)) {
-					//$this->logger('warning', 'LDAP Sync', 'Sync executed on (' . ($excu) . ') next execution in (' . $nextexcu . ')');
+					$this->logger('warning', 'LDAP Sync', 'Sync executed on (' . ($excu) . ') next execution in (' . $nextexcu . ')');
 				}
 				else {
 					$this->logger('warning', 'LDAP Sync', 'Sync executed on (' . ($excu) . ') next execution in (' . $nextexcu . ')' . "Total ldapusers: (" . $results['totalldap'] . ") Total agents: (" . $results['totalagents'] . ") Total Updated Users: (" . $results['updatedusers'] . ") Execute Time: (" . $results['executetime'] . ")");
@@ -130,8 +110,6 @@ class LdapMultiAuthPlugin extends Plugin {
 		$this->lastExec = 0; // it will contain the UNIXTIME of the last action
 		$this->nextExec = 0; // it will contain the UNIXTIME of the next action
 		$this->secToExec = 0; // it will contain the time in seconds until of the next action
-		//$this->logger('warning', 'lastRun', $this->lastRun(time()));
-		//$this->logger('warning', 'THISC', json_encode($this->cront));
 		if (isset($this->cront)) $this->check = true;
 		else {
 			if (!$this->updateLastrun(time())) $this->check = false;
@@ -145,9 +123,7 @@ class LdapMultiAuthPlugin extends Plugin {
 		$now = time();
 		if ($this->check) $FT = $this->getEventUpdatedTime();
 		if ($FT) {
-			//$this->logger('warning', 'FT', $FT);
 			$nextExec = $FT + ($this->minDelay * 60) - $now;
-			//$this->logger('warning', 'FTafter', $nextExec);
 			if ($nextExec < 0) {
 				if (!$this->updateLastrun($now)) return false;
 				else {
@@ -162,8 +138,6 @@ class LdapMultiAuthPlugin extends Plugin {
 				$this->lastExec = $FT;
 				$this->nextExec = $FT + $nextExec;
 				$this->secToExec = $nextExec;
-				//$this->logger('warning', 'FTsecS', $FT . " [] " . $nextExec);
-				//$this->logger('warning', 'THIS', json_encode($this));
 				return false;
 			}
 		}
@@ -214,10 +188,12 @@ class LdapMultiAuthPlugin extends Plugin {
 	 * Write information to system LOG
 	 *
 	 */
-	function logger($priority, $title, $message, $alert = false, $force = false) {
+	function logger($priority, $title, $message, $verbose = false) {
 		if (!empty(self::getConfig()
 			->get('debug-choice')) && self::getConfig()
-			->get('debug-choice')) {
+			->get('debug-choice') && !$verbose || (self::getConfig()
+			->get('debug-verbose') && $verbose)) {
+				
 			if (is_array($message) || is_object($message)) {
 				$message = json_encode($message);
 			}
@@ -262,32 +238,55 @@ class LdapMultiAuthPlugin extends Plugin {
 	 * @return boolean
 	 */
 	function firstRun() {
-		$sql = 'SELECT * FROM ' . PLUGIN_TABLE . ' WHERE `name` LIKE \'%Multi LDAP%\'';
+		//$sql = 'SELECT * FROM ' . PLUGIN_TABLE . ' WHERE `name` LIKE \'%Multi LDAP%\'';
+		$sql = 'SHOW TABLES LIKE \'' . TABLE_PREFIX . 'ldap_sync\'';
+		echo $sql;
 		$res = db_query($sql);
-		$rows = db_num_rows($res);
-
-		$name = MULTI_PLUGIN_ROOT . 'sync_mldap.php';
-		if (!copy($name, OST_ROOT . '/scp/sync_mldap.php')) {
-			echo "First run configuration error.  " . "Unable to copy files";
-			return false;
-		}
-
-		if ($rows <= 0) {
-			$this->createDBTables();
-		}
-		else {
-			$this->checkmultiDB();
-		}
 		return (db_num_rows($res) == 0);
 	}
 
-	function checkmultiDB() {
+	/**
+	 * Necessary functionality to configure first run of the application
+	 */
+	function configureFirstRun() {
+		if (! $this->createDBSyncTable ()) {
+			$this->logger('error', "First run configuration error.  ",  "Unable to create database tables!");
+			return false;
+		} else {
+			$this->logger('info', "First run configuration.  ",  "created database tables.");
+		}
+		return true;
+	}
+	
+	function chksynctable() {
 		$sql = 'SELECT 1 FROM ' . TABLE_PREFIX . 'ldap_sync' . ' LIMIT 1;';
 		$res = db_query($sql);
 		$rows = db_num_rows($res);
-		if ($rows >= 1) $this->createDBTables();
+		if ($rows >= 1) $this->createDBSyncTable();
 	}
 
+	function loadSync() {
+		$sql = 'SELECT * FROM ' . PLUGIN_TABLE . ' WHERE isactive=1 AND id=' . db_input($this->getId());
+		$source = MULTI_PLUGIN_ROOT . 'sync_mldap.php';
+		$file = $_SERVER["DOCUMENT_ROOT"] . OST_WEB_ROOT . 'scp/sync_mldap.php';
+		if (db_num_rows(db_query($sql))) {
+			if (!file_exists($file)) {
+				//echo $file;  || (filemtime($source) != @filemtime($file))
+				if (!copy($source, $file)) {
+					$this->logger('warning', "failed to copy ldap sync", $source);
+					//return false;
+				} else {
+					$this->logger('info', "copy ldap sync completed", $source);
+				}
+			} elseif (filemtime($source) > @filemtime($file)) {
+				$this->logger('info', "copy ldap sync updated", $source);
+			}
+			
+			include_once $file;
+			//return true;
+		}
+	}
+	
 	function needUpgrade() {
 		$sql = 'SELECT version FROM ' . PLUGIN_TABLE . ' WHERE `name` LIKE \'%Multi LDAP%\'';
 		if (!($res = db_query($sql))) {
@@ -305,27 +304,13 @@ class LdapMultiAuthPlugin extends Plugin {
 	function configureUpgrade() {
 
 	}
-
-	/**
-	 * Necessary functionality to configure first run of the application
-	 */
-	function configureFirstRun() {
-		$this->logger('warning', 'configureFirstRun', 'config');
-		$name = MULTI_PLUGIN_ROOT . 'sync_mldap.php';
-		echo 'configureFirstRun';
-		if (!copy($name, OST_ROOT . '/scp/sync_mldap.php')) {
-			echo "First run configuration error.  " . "Unable to copy files";
-			return false;
-		}
-		return true;
-	}
-
+	
 	/**
 	 * Kicks off database installation scripts
 	 *
 	 * @return boolean
 	 */
-	function createDBTables() {
+	function createDBSyncTable() {
 		//db_query("DROP TABLE IF EXISTS " . TABLE_PREFIX . "ldap_sync");
 		$sqlsync = ("CREATE TABLE " . TABLE_PREFIX . "ldap_sync (
 				  `id` bigint(20) unsigned NOT NULL,
@@ -333,7 +318,7 @@ class LdapMultiAuthPlugin extends Plugin {
 				  `updated` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 				  PRIMARY KEY (`id`)
 				) ENGINE=InnoDB DEFAULT CHARSET=utf8;");
-		//$this->logger('warning', 'createDBTables', $sqlsync);
+		$this->logger('warning', 'createDBSyncTable', $sqlsync);
 		$result = db_query($sqlsync);
 		if ($result) {
 			return true;
@@ -349,9 +334,8 @@ class LdapMultiAuthPlugin extends Plugin {
 	 */
 	function pre_uninstall(&$errors) {
 		$this->logger('warning', 'pre_uninstall', $errors);
-		//db_query("DROP TABLE IF EXISTS ".TABLE_PREFIX."multildap_schedule");
 		db_query("DROP TABLE IF EXISTS " . TABLE_PREFIX . "ldap_sync");
-		$name = OST_ROOT . 'scp/sync_mldap.php';
+		$name = INCLUDE_DIR . 'scp/sync_mldap.php';
 		$result = unlink($name);
 		if (!$result) return true;
 		return false;
@@ -581,7 +565,7 @@ class LDAPMultiAuthentication {
 			LdapMultiAuthPlugin::logger(LOG_INFO, 'login error (' . $username . ')', trim($errmsg));
 		}
 		if ($chkUser) {
-			if (!empty($user_info)) LdapMultiAuthPlugin::logger(LOG_INFO, 'ldap login (' . $username . ')', $loginfo[0]['msg']);
+			if (!empty($user_info)) LdapMultiAuthPlugin::logger(LOG_INFO, 'ldap login (' . $username . '['.$this->type.'])', $loginfo[0]['msg']);
 			return $this->authOrCreate($username);
 		}
 		else {
@@ -641,13 +625,20 @@ class LDAPMultiAuthentication {
 				// Lookup all the information on the user. Try to get the email
 				// addresss as well as the username when looking up the user
 				// locally.
-				if (!($info = $this->search($username))) return;
 
+				if (!($info = $this->search($username))) {
+					LdapMultiAuthPlugin::logger(LOG_INFO, 'ldap info (' . $username . ')', json_encode($info));
+				return;
+				}
+				
 				$acct = ClientAccount::lookupByUsername($username);
 
 				if ($acct && $acct->getId()) {
 					$client = new ClientSession(new EndUser($acct->getUser()));
+					//LdapMultiAuthPlugin::logger(LOG_INFO, 'ldap acct (' . $username . ')', json_encode($acct));
+					LdapMultiAuthPlugin::logger(LOG_INFO, 'ldap session (' . $username . ')', json_encode($client));
 				}
+				
 				if (!$client) {
 
 					$info['name'] = $info['first'] . " " . $info['last'];
@@ -659,6 +650,7 @@ class LDAPMultiAuthentication {
 					$info['dn'] = $info['dn'];
 
 					$client = new ClientCreateRequest($this, $username, $info);
+					LdapMultiAuthPlugin::logger(LOG_INFO, 'ldap client (' . $username . ')', json_encode($info));
 					//if (!$cfg || !$cfg->isClientRegistrationEnabled() && self::$config->get('multiauth-force-register')) {
 					// return $client->attemptAutoRegister();
 					//}
@@ -686,6 +678,7 @@ class LDAPMultiAuthentication {
 		$lookup_user = array();
 		preg_match('/(dc=(?:[^C]|C(?!N=))*)(?:;|$)/i', $lookup_dn, $match);
 		//preg_match('/(dc=)(.*?),.*/i', $lookup_dn, $match);
+		LdapMultiAuthPlugin::logger(LOG_INFO, 'ldap lookup (' . $lookup_dn . ')', $lookup_dn);
 		$base_dn = strtolower($match[0]);
 
 		$key = array_search($base_dn, preg_split('/;/', strtolower($this->getConfig()
@@ -752,7 +745,7 @@ class LDAPMultiAuthentication {
 		$lookup_user = self::flatarray($lookup_user);
 		$lookup_user['name'] = $lookup_user['full'];
 		//$lookup_user['office'] = $lookup_user['full'];
-		//LdapMultiAuthPlugin::logger('info', 'LookupInfo',($lookup_user));
+		//LdapMultiAuthPlugin::logger('info', 'LookupInfo',($lookup_user), true);
 		return $lookup_user;
 	}
 
@@ -770,20 +763,22 @@ class LDAPMultiAuthentication {
 			$ldap->searchPassword = $data['bind_pw'];
 
 			if ($ldap->connect()) {
-				$filter = "(&(objectCategory=person)(objectClass=user)(|(sAMAccountName={q}*)(firstName={q}*)(lastName={q}*)(displayName={q}*)))";
+				$filter = self::getConfig()->get('search_base');
 				if ($userlist = $ldap->getUsers($query, $this->adschema() , $filter)) {
-
 					$temp_userlist = $this->keymap($userlist);
 					$combined_userlist = array_merge($combined_userlist, self::flatarray($temp_userlist));
 				}
-			}
-			else {
+				//LdapMultiAuthPlugin::logger('debug', 'search query(' . $query . ')', $ldap->dn . json_encode($combined_userlist));
+				//LdapMultiAuthPlugin::logger('debug', 'search query(' . $query . ')', $ldap->dn . " - " . $ldap->ldapErrorCode . " - " . $ldap->ldapErrorText);
+			} else {
 				$conninfo[] = array(
 					false,
 					$data['sd'] . " error: " . $ldap->ldapErrorCode . " - " . $ldap->ldapErrorText
 				);
+				LdapMultiAuthPlugin::logger('info', 'search-error', $ldap->ldapErrorCode . " - " . $ldap->ldapErrorText);
 			}
 		}
+		LdapMultiAuthPlugin::logger('info', 'ldap search (' . $query . ')', json_encode($combined_userlist), true);
 		return $combined_userlist;
 	}
 }
@@ -808,7 +803,7 @@ class StaffLDAPMultiAuthentication extends StaffAuthenticationBackend implements
 	}
 	//adding new users
 	function lookup($query) {
-		//LdapMultiAuthPlugin::logger('info', 'lookup', $query);
+		//LdapMultiAuthPlugin::logger('info', 'lookup', $query, true);
 		$list = $this
 			->_ldap
 			->lookup($query);
@@ -816,12 +811,12 @@ class StaffLDAPMultiAuthentication extends StaffAuthenticationBackend implements
 			$list['backend'] = static ::$id;
 			$list['id'] = static ::$id . ':' . $list['dn'];
 		}
-		//LdapMultiAuthPlugin::logger('info', 'lookup', $list);
+		LdapMultiAuthPlugin::logger('info', 'lookup-result', $list, true);
 		return ($list);
 	}
 	//General searching of users
 	function search($query) {
-		//LdapMultiAuthPlugin::logger('info', 'search', $query);
+		//LdapMultiAuthPlugin::logger('info', 'search', $query, true);
 		if (strlen($query) < 3) return array();
 		$list = array(
 			$this
@@ -832,7 +827,7 @@ class StaffLDAPMultiAuthentication extends StaffAuthenticationBackend implements
 			$l['backend'] = static ::$id;
 			$l['id'] = static ::$id . ':' . $l['dn'];
 		}
-		//LdapMultiAuthPlugin::logger('info', 'search', $list);
+		LdapMultiAuthPlugin::logger('info', 'search-result', $list, true);
 		return $list;
 	}
 }
