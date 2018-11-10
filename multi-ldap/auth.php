@@ -238,9 +238,7 @@ class LdapMultiAuthPlugin extends Plugin {
 	 * @return boolean
 	 */
 	function firstRun() {
-		//$sql = 'SELECT * FROM ' . PLUGIN_TABLE . ' WHERE `name` LIKE \'%Multi LDAP%\'';
 		$sql = 'SHOW TABLES LIKE \'' . TABLE_PREFIX . 'ldap_sync\'';
-		echo $sql;
 		$res = db_query($sql);
 		return (db_num_rows($res) == 0);
 	}
