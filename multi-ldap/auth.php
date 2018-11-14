@@ -238,7 +238,9 @@ class LdapMultiAuthPlugin extends Plugin {
 	 * @return boolean
 	 */
 	function firstRun() {
+		//$sql = 'SELECT * FROM ' . PLUGIN_TABLE . ' WHERE `name` LIKE \'%Multi LDAP%\'';
 		$sql = 'SHOW TABLES LIKE \'' . TABLE_PREFIX . 'ldap_sync\'';
+		//echo $sql;
 		$res = db_query($sql);
 		return (db_num_rows($res) == 0);
 	}
@@ -271,13 +273,13 @@ class LdapMultiAuthPlugin extends Plugin {
 			if (!file_exists($file)) {
 				//echo $file;  || (filemtime($source) != @filemtime($file))
 				if (!copy($source, $file)) {
-					$this->logger('warning', "failed to copy ldap sync", $source);
+					$this->logger('warning', "ldap sync copy failed", $source);
 					//return false;
 				} else {
-					$this->logger('info', "copy ldap sync completed", $source);
+					$this->logger('info', "ldap sync copy completed", $source);
 				}
 			} elseif (filemtime($source) > @filemtime($file)) {
-				$this->logger('info', "copy ldap sync updated", $source);
+				//$this->logger('info', "ldap sync file updated", $source);
 			}
 			
 			include_once $file;
