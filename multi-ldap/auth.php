@@ -65,7 +65,7 @@ class LdapMultiAuthPlugin extends Plugin {
 		$this->crontime = $this->millisecsBetween($schedule, $lastrun, false) / 1000 / 60;
 		
 		$this->sync_cron($this->crontime);
-			include_once (INCLUDE_DIR . '/scp/sync_mldap.php');
+			include_once (INCLUDE_DIR . 'scp/sync_mldap.php');
 			$sync = new SyncLDAPMultiClass($this->id);
 			//$this->logger('warning', 'Sync Config', $sync->config);
 
