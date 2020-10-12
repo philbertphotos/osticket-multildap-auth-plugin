@@ -62,9 +62,20 @@ class SyncLDAPMultiClass extends LDAPMultiAuthentication {
 		}
 		return $combined_userlist;
 	}
-	
+
+	function email_split($str) {
+    $parts = explode(' ', trim($str));
+    $email = trim(array_pop($parts), "<> \t\n\r\0\x0B");
+    $name = trim(implode(' ', $parts), "\"\' \t\n\r\0\x0B");
+    if ($name == "" && strpos($email, "@") === false) {             // only single string - did not contain '@'
+        $name = $email;
+        $email = "";
+    }
+    return array('name' => $name, 'email' => $email);
+}
+
 	function sendAlertMsg($msg) {
-		$this->config = LdapMultiAuthPlugin::getConfig();
+		//$this->config = LdapMultiAuthPlugin::getConfig();
 		$ostmail = Email::lookup($this
 			->config
 			->get('sync_mailfrom'));
@@ -128,7 +139,8 @@ class SyncLDAPMultiClass extends LDAPMultiAuthentication {
 		return rtrim($time, '0');
 	}
 
-	function getconfig($id) {
+//public function foo($param = '', $_ = null)
+	public function getconfig($id = '' , $_ = null) {
 		$this->configvalues;
 		$sql = "SELECT `key`,`value` FROM " . TABLE_PREFIX . "config WHERE `namespace` = 'plugin." . $id . "';";
 		$result = db_query($sql);
@@ -257,7 +269,7 @@ class SyncLDAPMultiClass extends LDAPMultiAuthentication {
 						if ($ost_contact_field != 'name') {
 							$update_ostuser_sql = "INSERT INTO " . TABLE_PREFIX . "form_entry_values(entry_id, field_id, value)
 									values (
-									(SELECT id FROM `" . TABLE_PREFIX . "form_entry` WHERE `object_id` = (SELECT user_id FROM `" . TABLE_PREFIX . "user_account` WHERE `user_id` = '" . $user->user_id . "') AND form_id = 1),
+									(SELECT id FROM `" . TABLE_PREFIX . "form_entry` WHERE `object_id` = (SELECT user_id FROM `" . TABLE_PREFIX . "user_account` WHERE `id` = '" . $user->user_id . "') AND form_id = 1),
 									(SELECT id FROM `" . TABLE_PREFIX . "form_field` WHERE `name` = '" . $ost_contact_field . "' AND form_id = 1), \"" . $current_ldap_value . "\")
 									ON DUPLICATE KEY UPDATE value = \"" . $current_ldap_value . "\";";
 						}
@@ -356,7 +368,7 @@ class SyncLDAPMultiClass extends LDAPMultiAuthentication {
 		// Check if agents shall be updated with LDAP info
 		if ($this->config['sync-agents']) {
 			// Select all osTicket Agents
-			$qry_ostagents = "SELECT " . TABLE_PREFIX ."staff.username, " . TABLE_PREFIX . "staff.email, " . TABLE_PREFIX . "staff.phone, " . TABLE_PREFIX . "staff.phone_ext as ext, " . TABLE_PREFIX . "staff.mobile FROM " . TABLE_PREFIX . "staff WHERE " . TABLE_PREFIX . "staff.username IS NOT NULL";
+			$qry_ostagents = "SELECT staff.username, " . TABLE_PREFIX . "staff.email, " . TABLE_PREFIX . "staff.phone, " . TABLE_PREFIX . "staff.phone_ext as ext, " . TABLE_PREFIX . "staff.mobile FROM " . TABLE_PREFIX . "staff WHERE " . TABLE_PREFIX . "staff.username IS NOT NULL";
 
 			$res_ostagents = db_query($qry_ostagents);
 
