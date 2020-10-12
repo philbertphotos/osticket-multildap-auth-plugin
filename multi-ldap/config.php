@@ -37,8 +37,9 @@ class LdapMultiAuthPluginConfig extends PluginConfig {
 			->ht['value']);
 		$time_zone = db_result(db_query("SELECT value FROM `" . TABLE_PREFIX . "config` WHERE `key` = 'default_timezone'"));
 		$scheduletime = LdapMultiAuthPlugin::DateFromTimezone(strftime("%Y-%m-%d %H:%M", $sync_val->schedule) , 'UTC', $time_zone, 'F d Y g:i a');
-		//echo json_encode($this->config['sync_data']);
-		return $scheduletime;
+		return json_encode($this->config['sync_mailfrom']->ht);
+			//->ht['value']);
+		//return $scheduletime;
 	}
 
 	function checkschedule() {
@@ -68,10 +69,10 @@ class LdapMultiAuthPluginConfig extends PluginConfig {
 		$sql = 'SELECT email_id,email,name,smtp_active FROM ' . EMAIL_TABLE . ' email ORDER by name';
 		if (($res = db_query($sql)) && db_num_rows($res)) {
 			while (list($id, $email, $name, $smtp) = db_fetch_row($res)) {
-				//$selected=($info['email_id'] && $id==$info['email_id'])?'selected="selected"':'';
 				if ($name) $email = Format::htmlchars("$name <$email>");
 				if ($smtp) $email .= ' (' . __('SMTP') . ')';
-				$frommail[] = $id = $email;
+					$i++;
+				$frommail[$i] = $id = $email;
 			}
 			return $frommail;
 		}
@@ -335,7 +336,7 @@ class LdapMultiAuthPluginConfig extends PluginConfig {
 					
 				)
 			)) ,
-			/*'sync_data' => new TextboxField(array(
+			'sync_data' => new TextboxField(array(
 				'id' => 'sync_data',
 				'label' => $__('Sync Lastrun') ,
 				'configuration' => array(
@@ -343,7 +344,7 @@ class LdapMultiAuthPluginConfig extends PluginConfig {
 					'length' => 20,
 					'visibility' => false
 				) ,
-			)) ,*/
+			)) ,
 			'sync_full' => new BooleanField(array(
 				'label' => $__('Full Sync') ,
 				'hint' => $__('This does a full sync on the next scheduled time (this happens only once)') ,
