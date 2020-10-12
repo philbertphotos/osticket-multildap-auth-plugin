@@ -1,8 +1,8 @@
 <?php
 return array(
     'id' =>             'multiauth:ldap',
-    'version' =>        '1.2.2',
-    'name' =>           'Multi LDAP Authentication',
+    'version' =>        '1.3',
+    'name' =>           'Multi LDAP Authentication and Lookup',
     'author' =>         'Joseph Philbert',
     'description' =>    'Provides a configurable authentication backend which works against multiple LDAP servers',
     'url' =>            'http://www.vide.vi',
