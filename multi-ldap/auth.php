@@ -764,14 +764,18 @@ class LDAPMultiAuthentication {
 			$ldap->searchUser = $data['bind_dn'];
 			$ldap->searchPassword = $data['bind_pw'];
 
+			//LdapMultiAuthPlugin::logger('debug', 'ldap query(' . $query . ')', $ldap->dn . json_encode($ldap));
 			if ($ldap->connect()) {
-				$filter = self::getConfig()->get('search_base');
+				$filter = "(&(objectCategory=person)(objectClass=user)(|(sAMAccountName=".$query."*)))";//self::getConfig()->get('search_base');
 				if ($userlist = $ldap->getUsers($query, $this->adschema() , $filter)) {
 					$temp_userlist = $this->keymap($userlist);
 					$combined_userlist = array_merge($combined_userlist, self::flatarray($temp_userlist));
-				}
-				//LdapMultiAuthPlugin::logger('debug', 'search query(' . $query . ')', $ldap->dn . json_encode($combined_userlist));
+				//LdapMultiAuthPlugin::logger('debug', 'search filter(' . $query . ')', $ldap->dn . json_encode($filter));
+				//LdapMultiAuthPlugin::logger('debug', 'search query(' . $query . ')', $ldap->dn . json_encode($userlist));
 				//LdapMultiAuthPlugin::logger('debug', 'search query(' . $query . ')', $ldap->dn . " - " . $ldap->ldapErrorCode . " - " . $ldap->ldapErrorText);
+				} else {
+					LdapMultiAuthPlugin::logger('debug', 'search-error', $ldap->ldapErrorCode . " - " . $ldap->ldapErrorText);
+				}
 			} else {
 				$conninfo[] = array(
 					false,
