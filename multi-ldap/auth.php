@@ -766,7 +766,7 @@ class LDAPMultiAuthentication {
 
 			//LdapMultiAuthPlugin::logger('debug', 'ldap query(' . $query . ')', $ldap->dn . json_encode($ldap));
 			if ($ldap->connect()) {
-				$filter = "(&(objectCategory=person)(objectClass=user)(|(sAMAccountName=".$query."*)))";//self::getConfig()->get('search_base');
+				$filter = self::getConfig()->get('search_base');
 				if ($userlist = $ldap->getUsers($query, $this->adschema() , $filter)) {
 					$temp_userlist = $this->keymap($userlist);
 					$combined_userlist = array_merge($combined_userlist, self::flatarray($temp_userlist));
