@@ -40,8 +40,9 @@ It syncs both the agents and users without issues with about 1000+ users registe
 
 Roadmap
 ==========
+Ldap caching for large LDAP domains
 Planning on adding a TAB feature to make setting section easier to manage.
-Ldap Query caching.
+
 ### From source
 
 to be updated.........
