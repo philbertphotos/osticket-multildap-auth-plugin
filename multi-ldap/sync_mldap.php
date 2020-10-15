@@ -269,7 +269,7 @@ class SyncLDAPMultiClass extends LDAPMultiAuthentication {
 						if ($ost_contact_field != 'name') {
 							$update_ostuser_sql = "INSERT INTO " . TABLE_PREFIX . "form_entry_values(entry_id, field_id, value)
 									values (
-									(SELECT id FROM `" . TABLE_PREFIX . "form_entry` WHERE `object_id` = (SELECT user_id FROM `" . TABLE_PREFIX . "user_account` WHERE `id` = '" . $user->user_id . "') AND form_id = 1),
+									(SELECT id FROM `" . TABLE_PREFIX . "form_entry` WHERE `object_id` = (SELECT user_id FROM `" . TABLE_PREFIX . "user_account` WHERE `user_id` = '" . $user->user_id . "') AND form_id = 1),
 									(SELECT id FROM `" . TABLE_PREFIX . "form_field` WHERE `name` = '" . $ost_contact_field . "' AND form_id = 1), \"" . $current_ldap_value . "\")
 									ON DUPLICATE KEY UPDATE value = \"" . $current_ldap_value . "\";";
 						}
@@ -368,7 +368,7 @@ class SyncLDAPMultiClass extends LDAPMultiAuthentication {
 		// Check if agents shall be updated with LDAP info
 		if ($this->config['sync-agents']) {
 			// Select all osTicket Agents
-			$qry_ostagents = "SELECT staff.username, " . TABLE_PREFIX . "staff.email, " . TABLE_PREFIX . "staff.phone, " . TABLE_PREFIX . "staff.phone_ext as ext, " . TABLE_PREFIX . "staff.mobile FROM " . TABLE_PREFIX . "staff WHERE " . TABLE_PREFIX . "staff.username IS NOT NULL";
+			$qry_ostagents = "SELECT " . TABLE_PREFIX . "staff.username, " . TABLE_PREFIX . "staff.email, " . TABLE_PREFIX . "staff.phone, " . TABLE_PREFIX . "staff.phone_ext as ext, " . TABLE_PREFIX . "staff.mobile FROM " . TABLE_PREFIX . "staff WHERE " . TABLE_PREFIX . "staff.username IS NOT NULL";
 
 			$res_ostagents = db_query($qry_ostagents);
 
