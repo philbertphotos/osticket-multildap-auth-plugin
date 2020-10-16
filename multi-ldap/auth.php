@@ -5,15 +5,13 @@ require_once ('class.AuthLdap.php');
 require_once ('class.Mail.php');
 
 define('ospath', str_replace('scp/plugins.php', '', $_SERVER['PHP_SELF']));
-define('MULTI_PLUGIN_VERSION', '1.2');
+define('MULTI_PLUGIN_VERSION', '1.3.1');
 
 //FOLDERS
-define('OST_WEB_ROOT', osTicket::get_root_path(__DIR__));
-define('OST_ROOT', INCLUDE_DIR . '../');
 define('MULTI_PLUGIN_ROOT', __DIR__ . '/');
 
 require_once ('config.php');
-//include_once (OST_ROOT.'/scp/sync_mldap.php');
+
 class LdapMultiAuthPlugin extends Plugin {
 	var $config_class = 'LdapMultiAuthPluginConfig';
 	var $crontime;
@@ -27,7 +25,6 @@ class LdapMultiAuthPlugin extends Plugin {
 		else if ($this->needUpgrade()) {
 			$this->configureUpgrade();
 		}
-		//$this->checkmultiDB();
 
 		$this->loadSync();
 		$config = $this->getConfig();
@@ -41,10 +38,9 @@ class LdapMultiAuthPlugin extends Plugin {
 
 	function loadSync() {
 		$sql = 'SELECT FROM ' . PLUGIN_TABLE . 'WHERE isactive=1 AND id=' . db_input($this->getId());
-		$name = MULTI_PLUGIN_ROOT . 'sync_mldap.php';
 		if (db_num_rows(db_query($sql))) {
-			if (!file_exists('scp/sync_mldap.php') || (filemtime($name) != @filemtime('scp/sync_mldap.php'))) copy($name, OST_ROOT . '/scp/sync_mldap.php');
-			include_once (OST_ROOT . '/scp/sync_mldap.php');
+			if (!file_exists('../scp/sync_mldap.php') || (filemtime(MULTI_PLUGIN_ROOT.'/sync_mldap.php') != @filemtime('../scp/sync_mldap.php'))) $this->sync_copy();
+			include_once ('../scp/sync_mldap.php');
 		}
 	}
 
@@ -75,7 +71,7 @@ class LdapMultiAuthPlugin extends Plugin {
 		//$this->logger('warning', 'entry', json_encode($entry));
 
 		$this->sync_cron($this->crontime);
-			include_once (OST_ROOT . '/scp/sync_mldap.php');
+			include_once ('../scp/sync_mldap.php');
 			$sync = new SyncLDAPMultiClass($this->id);
 			//$this->logger('warning', 'Sync Config', $sync->config);
 
@@ -199,10 +195,10 @@ class LdapMultiAuthPlugin extends Plugin {
 	 *
 	 */
 	function logger($priority, $title, $message, $verbose = false) {
-		if (!empty(self::getConfig()
-			->get('debug-choice')) && self::getConfig()
-			->get('debug-choice') && !$verbose || (self::getConfig()
-			->get('debug-verbose') && $verbose)) {
+		//if (!empty(self::getConfig()
+			//->get('debug-choice')) && self::getConfig()
+			//->get('debug-choice') && !$verbose || (self::getConfig()
+			//->get('debug-verbose') && $verbose)) {
 				
 			if (is_array($message) || is_object($message)) {
 				$message = json_encode($message);
@@ -239,7 +235,7 @@ class LdapMultiAuthPlugin extends Plugin {
 			//Save log based on system log level settings.
 			$sql = 'INSERT INTO ' . SYSLOG_TABLE . ' SET created=NOW(), updated=NOW() ' . ',title=' . db_input(Format::sanitize($title, true)) . ',log_type=' . db_input($loglevel[$level]) . ',log=' . db_input(Format::sanitize($message, false)) . ',ip_address=' . db_input($_SERVER['REMOTE_ADDR']);
 			db_query($sql, false);
-		}
+		//}
 	}
 
 	/**
@@ -248,32 +244,44 @@ class LdapMultiAuthPlugin extends Plugin {
 	 * @return boolean
 	 */
 	function firstRun() {
-		$sql = 'SELECT * FROM ' . PLUGIN_TABLE . ' WHERE `name` LIKE \'%Multi LDAP%\'';
+		//$sql = 'SELECT version FROM ' . PLUGIN_TABLE . ' WHERE `name` LIKE \'%Multi LDAP%\'';
+		$sql = "SHOW TABLES LIKE '". TABLE_PREFIX ."ldap_sync'";
 		$res = db_query($sql);
 		$rows = db_num_rows($res);
 
-		$name = MULTI_PLUGIN_ROOT . 'sync_mldap.php';
-		if (!copy($name, OST_ROOT . '/scp/sync_mldap.php')) {
-			echo "First run configuration error.  " . "Unable to copy files";
-			return false;
-		}
-
 		if ($rows <= 0) {
-			$this->createDBTables();
-		}
-		else {
-			$this->checkmultiDB();
+			$this->createSyncTables();
+			$this->sync_copy();
 		}
 		return (db_num_rows($res) == 0);
 	}
 
-	function checkmultiDB() {
-		$sql = 'SELECT 1 FROM ' . TABLE_PREFIX . 'ldap_sync' . ' LIMIT 1;';
-		$res = db_query($sql);
-		$rows = db_num_rows($res);
-		if ($rows >= 1) $this->createDBTables();
+	function sync_copy() {
+		$file = MULTI_PLUGIN_ROOT.'/sync_mldap.php';
+		$newfile = '../scp/sync_mldap.php';
+		$path = '../scp';
+		if (!file_exists($newfile)){
+			//if( chmod($path, 0755)) chmod($path, 0777);
+			if(!copy($file,$newfile)){
+				$this->logger('error', 'MLA-firstRun', "failed to copy $file to $newfile");
+				return false;
+			}else{
+				$this->logger('info', 'MLA-firstRun', "File copied to $newfile\n");
+				//if( chmod($path, 0777)) chmod($path, 0755);
+				return true;
+			}
+		}
 	}
 
+	function updateVersion() {
+		$sql = "UPDATE version ' . PLUGIN_TABLE . ' SET version='".MULTI_PLUGIN_VERSION."' WHERE `name` LIKE '%Multi LDAP%'";
+		if (!($res = db_query($sql))) {
+			return true;
+		}
+
+		return false;
+	}
+	
 	function needUpgrade() {
 		$sql = 'SELECT version FROM ' . PLUGIN_TABLE . ' WHERE `name` LIKE \'%Multi LDAP%\'';
 		if (!($res = db_query($sql))) {
@@ -296,14 +304,8 @@ class LdapMultiAuthPlugin extends Plugin {
 	 * Necessary functionality to configure first run of the application
 	 */
 	function configureFirstRun() {
-		$this->logger('warning', 'configureFirstRun', 'config');
-		$name = MULTI_PLUGIN_ROOT . 'sync_mldap.php';
-		echo 'configureFirstRun';
-		if (!copy($name, OST_ROOT . '/scp/sync_mldap.php')) {
-			echo "First run configuration error.  " . "Unable to copy files";
-			return false;
-		}
-		return true;
+		//$this->logger('warning', 'configureFirstRun', 'config');
+			return $this->sync_copy();
 	}
 
 	/**
@@ -311,15 +313,15 @@ class LdapMultiAuthPlugin extends Plugin {
 	 *
 	 * @return boolean
 	 */
-	function createDBTables() {
-		//db_query("DROP TABLE IF EXISTS " . TABLE_PREFIX . "ldap_sync");
+	function createSyncTables() {
+		db_query("DROP TABLE IF EXISTS " . TABLE_PREFIX . "ldap_sync");
 		$sqlsync = ("CREATE TABLE " . TABLE_PREFIX . "ldap_sync (
 				  `id` bigint(20) unsigned NOT NULL,
 				  `guid` varchar(40) NOT NULL,
 				  `updated` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 				  PRIMARY KEY (`id`)
 				) ENGINE=InnoDB DEFAULT CHARSET=utf8;");
-		//$this->logger('warning', 'createDBTables', $sqlsync);
+		$this->logger('warning', 'MLA-createSyncTables', $sqlsync);
 		$result = db_query($sqlsync);
 		if ($result) {
 			return true;
@@ -334,13 +336,11 @@ class LdapMultiAuthPlugin extends Plugin {
 	 * @return boolean
 	 */
 	function pre_uninstall(&$errors) {
-		$this->logger('warning', 'pre_uninstall', $errors);
-		//db_query("DROP TABLE IF EXISTS ".TABLE_PREFIX."multildap_schedule");
+		$this->logger('warning', 'MLA-uninstall', $errors);
 		db_query("DROP TABLE IF EXISTS " . TABLE_PREFIX . "ldap_sync");
-		$name = OST_ROOT . 'scp/sync_mldap.php';
-		$result = unlink($name);
-		if (!$result) return true;
-		return false;
+		$result = unlink('../scp/sync_mldap.php');
+		//if (!$result) return true;
+		return true;
 	}
 }
 
