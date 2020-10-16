@@ -105,17 +105,7 @@ class LdapMultiAuthPluginConfig extends PluginConfig {
 					'html' => false,
 					'rows' => 2,
 					'cols' => 40
-				) ,
-				//'validators' => array(
-				// function($self, $val) use ($__) {
-				//	$domains = explode('|', $val);
-				//foreach ($domains as $domain) {
-				// if (strpos($domain, ',') === false)
-				//   $self->addError(
-				//     $__('Fully-qualified domain name is expected'));
-				//}
-				//}),
-				
+				) ,			
 			)) ,
 			'shortdomain' => new TextboxField(array(
 				'id' => 'sd',
@@ -253,6 +243,27 @@ class LdapMultiAuthPluginConfig extends PluginConfig {
 				'hint' => $__('Set schedule based on string examples: "+10 minutes", "+1 hour", "+1 day", 
 				"next Thursday", "+1 week", "weekdays 1AM", "+2 weekends", "+2 days", "4 hours", "10 September 2000"') ,
 			)) ,
+		  /*'sync_schedule' => new ChoiceField(
+			array(
+			  'label' => $__('Number of attachments to show initially'),
+			  'default' => "ALL",
+			  'hint' => $__(
+				'If you find too many attachments displaying at once is slowing you down, change this to only show some of them at first.'),
+			  'choices' => array(
+				"NONE" => '0',
+				'1' => '1',
+				'2' => '2',
+				'3' => '3',
+				'4' => '4',
+				'5' => '5',
+				'6' => '6',
+				'7' => '7',
+				'8' => '8',
+				'9' => '9',
+				'10' => '10',
+				"ALL" => $__('All') // Woo.
+			  )
+			)),			*/
 			'sync_schedule_show' => new SectionBreakField(array(
 				'label' => $__('Next schedule: ' . $this->getschedule()) ,
 			)) ,
@@ -322,7 +333,7 @@ class LdapMultiAuthPluginConfig extends PluginConfig {
         $.ajax({ //Send the val to php file using Ajax in POST method
             type: "POST",
             data: {data: "' . $this->section . '"},
-            url: "' . OST_ROOT . '/scp/sync_mldap.php?ajax=true",
+            url: "../scp/sync_mldap.php?ajax=true",
             success: function(data) { // Get the result and assign to each cases
                 console.log(data);
                 var json = $.parseJSON(data);
@@ -427,7 +438,6 @@ class LdapMultiAuthPluginConfig extends PluginConfig {
 		}
 
 		foreach (LDAPMultiAuthentication::connectcheck($ldapdata) as $i => $connerror) {
-			//LDAPAuthentication::console($connerror);
 			if (!$connerror['bool']) {
 				$this->getForm()
 					->getField('servers')
