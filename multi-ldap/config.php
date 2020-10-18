@@ -37,9 +37,7 @@ class LdapMultiAuthPluginConfig extends PluginConfig {
 			->ht['value']);
 		$time_zone = db_result(db_query("SELECT value FROM `" . TABLE_PREFIX . "config` WHERE `key` = 'default_timezone'"));
 		$scheduletime = LdapMultiAuthPlugin::DateFromTimezone(strftime("%Y-%m-%d %H:%M", $sync_val->schedule) , 'UTC', $time_zone, 'F d Y g:i a');
-		return json_encode($this->config['sync_mailfrom']->ht);
-			//->ht['value']);
-		//return $scheduletime;
+		return $scheduletime; //$this->config['sync_mailfrom']->ht['updated'];
 	}
 
 	function checkschedule() {
@@ -240,15 +238,15 @@ class LdapMultiAuthPluginConfig extends PluginConfig {
 					'size' => 40,
 					'length' => 40
 				) ,
-				'hint' => $__('Set schedule based on string examples: "+10 minutes", "+1 hour", "+1 day", 
-				"next Thursday", "+1 week", "weekdays 1AM", "+2 weekends", "+2 days", "4 hours", "10 September 2000"') ,
+				'hint' => $__('<script></script>Set schedule based on string examples: "10 minutes", "1 hour", "1 day", 
+				"next Thursday", "1 week", "weekdays 1AM", "2 weekends", "2 days", "4 hours", "10 September 2000"') ,
 			)) ,
 		  /*'sync_schedule' => new ChoiceField(
 			array(
-			  'label' => $__('Number of attachments to show initially'),
+			  'label' => $__(''),
 			  'default' => "ALL",
 			  'hint' => $__(
-				'If you find too many attachments displaying at once is slowing you down, change this to only show some of them at first.'),
+				''),
 			  'choices' => array(
 				"NONE" => '0',
 				'1' => '1',
