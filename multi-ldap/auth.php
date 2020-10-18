@@ -10,6 +10,8 @@ define('MULTI_PLUGIN_VERSION', '1.3.1');
 //FOLDERS
 define('MULTI_PLUGIN_ROOT', __DIR__ . '/');
 
+require_once ('config.php');
+
 class LdapMultiAuthPlugin extends Plugin {
 	var $config_class = 'LdapMultiAuthPluginConfig';
 	var $crontime;
@@ -99,6 +101,7 @@ class LdapMultiAuthPlugin extends Plugin {
 		$output;
 		foreach ($sync_info as $info) {
 			if ($info['key'] == 'sync_schedule') {
+				//$output['schedulestr'] = $info['value']; //strtotime($info['value'] . " " . $this->time_zone);
 				$output['format'] = "+".$info['value'];
 				$output['scheduleupdate'] = $info['updated'];
 			}
