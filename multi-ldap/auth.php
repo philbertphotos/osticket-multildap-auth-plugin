@@ -10,8 +10,6 @@ define('MULTI_PLUGIN_VERSION', '1.3.1');
 //FOLDERS
 define('MULTI_PLUGIN_ROOT', __DIR__ . '/');
 
-require_once ('config.php');
-
 class LdapMultiAuthPlugin extends Plugin {
 	var $config_class = 'LdapMultiAuthPluginConfig';
 	var $crontime;
@@ -101,8 +99,7 @@ class LdapMultiAuthPlugin extends Plugin {
 		$output;
 		foreach ($sync_info as $info) {
 			if ($info['key'] == 'sync_schedule') {
-				//$output['schedulestr'] = $info['value']; //strtotime($info['value'] . " " . $this->time_zone);
-				$output['format'] = $info['value'];
+				$output['format'] = "+".$info['value'];
 				$output['scheduleupdate'] = $info['updated'];
 			}
 
@@ -250,8 +247,8 @@ class LdapMultiAuthPlugin extends Plugin {
 		$rows = db_num_rows($res);
 
 		if ($rows <= 0) {
+			$this->sync_copy();			
 			$this->createSyncTables();
-			$this->sync_copy();
 		}
 		return (db_num_rows($res) == 0);
 	}
@@ -263,10 +260,10 @@ class LdapMultiAuthPlugin extends Plugin {
 		if (!file_exists($newfile)){
 			//if( chmod($path, 0755)) chmod($path, 0777);
 			if(!copy($file,$newfile)){
-				$this->logger('error', 'MLA-firstRun', "failed to copy $file to $newfile");
+				$this->logger('error', 'MLA-firstRun', "failed to copy LDAP_Sync API to SCP folder");
 				return false;
 			}else{
-				$this->logger('info', 'MLA-firstRun', "File copied to $newfile\n");
+				$this->logger('info', 'MLA-firstRun', "Copied LDAP_Sync API to SCP folder");
 				//if( chmod($path, 0777)) chmod($path, 0755);
 				return true;
 			}
