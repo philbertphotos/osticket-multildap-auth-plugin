@@ -260,7 +260,7 @@ class SyncLDAPMultiClass extends LDAPMultiAuthentication {
 				}
 
 				if ($ost_contact_field == 'name') {
-					$sql_value = db_result(db_query("SELECT name FROM ost_user									
+					$sql_value = db_result(db_query("SELECT name FROM " . TABLE_PREFIX . "ost_user									
 								WHERE id = " . $user->user_id));
 				}
 
