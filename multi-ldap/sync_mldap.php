@@ -62,34 +62,15 @@ class SyncLDAPMultiClass extends LDAPMultiAuthentication {
 		}
 		return $combined_userlist;
 	}
-
-	function email_split($str) {
-    $parts = explode(' ', trim($str));
-    $email = trim(array_pop($parts), "<> \t\n\r\0\x0B");
-    $name = trim(implode(' ', $parts), "\"\' \t\n\r\0\x0B");
-    if ($name == "" && strpos($email, "@") === false) {             // only single string - did not contain '@'
-        $name = $email;
-        $email = "";
-    }
-    return array('name' => $name, 'email' => $email);
-}
-
+	
 	function sendAlertMsg($msg) {
-		//$this->config = LdapMultiAuthPlugin::getConfig();
-		$ostmail = Email::lookup($this
-			->config
-			->get('sync_mailfrom'));
-		Crypto::decrypt($ostmail->ht['userpass'], SECRET_SALT, $ostmail->ht['userid']);
+		$ostmail = Email::lookup(key(json_decode($this->config['sync_mailfrom'])));
 		$alert_mail = new pssm_Mail();
-		//$alert_mail->setTo($usr->mail, ($usr->sn .', ' .$usr->givenname))
 		$alert_mail->setTo($this
-			->config
-			->get('sync_mailto'))
+			->config['sync_mailto'])
 			->setSubject('MultiLdap Report')
 			->setParameters('-f admin')
 			->setFrom($ostmail->ht['email'], $ostmail->ht['name'])
-		//->addMailHeader('Reply-To', _get_setting('system_email'), trim(_get_setting('system_name')))
-		
 			->addGenericHeader('X-Priority', '1 (Highest)')
 			->addGenericHeader('Importance', 'High')
 			->addGenericHeader('X-Mailer', $_pssm_name . ' ' . $_pssm_version)->setMessage($msg, true);
@@ -171,6 +152,14 @@ class SyncLDAPMultiClass extends LDAPMultiAuthentication {
 		return false;
 	}
 
+	function update_username($guiduser, $id) {
+		$sql = "UPDATE " . TABLE_PREFIX . "user_account SET username ='"
+				. $guiduser ."' WHERE user_id = '" . $id . "'";
+		$result = db_query($sql);
+			//LdapMultiAuthPlugin::logger('debug', 'syncname-result', $sql, true);
+		return $result;
+	}
+	
 	function update_users($users) {
 		$i;
 		foreach ($users as $user) {
@@ -347,22 +336,16 @@ class SyncLDAPMultiClass extends LDAPMultiAuthentication {
 										</tr>';
 		//Clean User Array
 		$ad_users = array();
-		foreach ($list as $arr) {
-			//if (contains($arr['dn'][0], 'OU=_')) {
-			$ad_users[$arr['mail'][0]] = $this->_userobject($arr);
-			//}
+		foreach ($list as $val) {
+			$ad_users[$val['mail'][0]] = $this->_userobject($val);
 			
-		}
-		ksort($ad_users);
+		}		ksort($ad_users);
 
+		//Create guid Array
 		$guid_users = array();
 		foreach ($list as $val) {
-			//	if (contains($val['dn'][0], 'OU=_')) {
-			$guid_users[$val['objectguid']] = $this->_userobject($val);
-			//	}
-			
-		}
-		ksort($guid_users);
+			$guid_users[$val['objectguid']] = $this->_userobject($val);			
+		} 		ksort($guid_users);
 
 		//***************Sync Agents************************
 		// Check if agents shall be updated with LDAP info
@@ -431,17 +414,30 @@ class SyncLDAPMultiClass extends LDAPMultiAuthentication {
 
 			//echo json_encode($emailusers).'<br>';
 			//Update Global Array;
-			$sync_array = db_query("SELECT " . TABLE_PREFIX . "user.id as user_id, " . TABLE_PREFIX . "user_email.id as email_id," . TABLE_PREFIX . "user.name, " . TABLE_PREFIX . "user_email.address as mail,  " . TABLE_PREFIX . "user_account.status ," . TABLE_PREFIX . "ldap_sync.updated
+			$sync_array = db_query("SELECT " . TABLE_PREFIX . "user.id as user_id, " . TABLE_PREFIX . "user_email.id as email_id," . TABLE_PREFIX . "user.name, " . TABLE_PREFIX . "user_email.address as mail,  " . TABLE_PREFIX . "user_account.username ,  " . TABLE_PREFIX . "user_account.status , " . TABLE_PREFIX . "ldap_sync.guid, " . TABLE_PREFIX . "ldap_sync.updated
 									FROM " . TABLE_PREFIX . "user 
 									LEFT JOIN " . TABLE_PREFIX . "user_email on " . TABLE_PREFIX . "user.id=" . TABLE_PREFIX . "user_email.user_id
 									LEFT JOIN " . TABLE_PREFIX . "user_account on " . TABLE_PREFIX . "user.id = " . TABLE_PREFIX . "user_account.user_id
 									LEFT JOIN " . TABLE_PREFIX . "ldap_sync on " . TABLE_PREFIX . "user.id = " . TABLE_PREFIX . "ldap_sync.id;");
-
+			$g;
 			foreach (db_assoc_array($sync_array, MYSQLI_ASSOC) as $sync) {
 				$uid = $sync["user_id"];
 				unset($sync["user_id"]);
+								
+				//Update any username changes
+				//$currentusername = db_result(db_query("SELECT username FROM `" . TABLE_PREFIX . "user_account` WHERE id ='". $uid ."'"));
+				//->samaccountname != $currentusername && $uid == $guid_users[$key]->user_id
+					if ($guiduser = $guid_users[$sync["guid"]]) {
+						if (!empty($sync['username']))
+							if ($guiduser->samaccountname !== $sync['username']){
+							$this->update_username($guiduser->samaccountname, $uid); 
+							//$log_header .= "GUID: " . $guiduser->samaccountname ."-" . $sync['username'] . "</br>";
+							$g++;
+							}
+				}	
 				$this->sync_info[$uid] = $sync;
 			}
+			
 			//echo json_encode($sync_info) ."</br>";
 			//Query only users that have no guid.
 			$qry_ostusers = db_query("SELECT " . TABLE_PREFIX . "user.id as user_id, 
@@ -486,21 +482,22 @@ class SyncLDAPMultiClass extends LDAPMultiAuthentication {
 			$updateusers = array();
 			foreach (db_assoc_array($sql_ostguid, MYSQLI_ASSOC) as $guid) {
 				$key = $guid['guid']; //Key value for sorting
+					
 				//Get UserID based on key
 				if (array_key_exists($key, $guid_users)) {
 					$guid_users[$key]->user_id = $guid['id'];
 					if ($_REQUEST['full'] || $this->config['sync_full']) {
 						$updateusers[] = $guid_users[$key];
 					}
-					elseif ($guid['updated'] != $this->changetime($guid_users[$key]->whenchanged)) {
+					elseif ($guid['updated'] !== $this->changetime($guid_users[$key]->whenchanged)) {
 						$updateusers[] = $guid_users[$key];
 					}
 				}
 			}
 			//$log_header .= ("Users not Synced: " . db_num_rows($qry_ostusers) . '<br>');
 			$log_header .= ("(" . db_num_rows($qry_ostusers) . ') 	users not in ldap.<br>');
+			$log_header .= ("(" . ($g) . ') 	users renamed.<br>');			
 			$log_header .= ("(" . count($updateusers) . ') 	users synced.<br>');
-			//$log_header .= json_encode($updateusers) . '.<br>';
 			$this->sync_results['updatedusers'] = count($updateusers);
 			$this->update_users($updateusers);
 		}
