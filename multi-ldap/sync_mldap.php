@@ -50,8 +50,6 @@ class SyncLDAPMultiClass extends LDAPMultiAuthentication {
 				if ($userlist = $ldap->getUsers('', $attr, $this->config['sync_filter'])) {
 					$combined_userlist = array_merge($combined_userlist, $userlist);
 				}
-				//var_export($ldap->getRoot());
-				
 			}
 			else {
 				$conninfo[] = array(
@@ -120,7 +118,6 @@ class SyncLDAPMultiClass extends LDAPMultiAuthentication {
 		return rtrim($time, '0');
 	}
 
-//public function foo($param = '', $_ = null)
 	public function getconfig($id = '' , $_ = null) {
 		$this->configvalues;
 		$sql = "SELECT `key`,`value` FROM " . TABLE_PREFIX . "config WHERE `namespace` = 'plugin." . $id . "';";
@@ -230,7 +227,6 @@ class SyncLDAPMultiClass extends LDAPMultiAuthentication {
 				}
 
 				// Check for empty or Duplicates values
-				// $sql_value = db_fetch_field(db_query($check_duplicate))->fetch_object()->value.'<br />';
 				$res = db_query($check_duplicate);
 				if (db_num_rows($res) == 1) {
 					while ($row = db_fetch_array($res)) {
@@ -271,7 +267,7 @@ class SyncLDAPMultiClass extends LDAPMultiAuthentication {
 						// update changed field
 						$result = db_query($update_ostuser_sql);
 						if (!$result) {
-							$this->log_report['status'] .= " (Field Write Error[$ost_contact_field])";
+							$this->log_report['status'] .= " (Error: [$ost_contact_field])";
 							$changed_attr = NULL;
 							continue;
 						}
@@ -283,13 +279,12 @@ class SyncLDAPMultiClass extends LDAPMultiAuthentication {
 
 			if (!empty($changed_attr)) {
 				$this->log_report['status'] .= "(Updated)";
-
-			}
-			else {
+			} else {
 				$this->log_report['status'] .= "(No Changes)";
 			}
+			
 			//Update user When Change time.
-			if ($synckey['updated'] != $this->changetime($user->whenchanged) || !$this->contains($this->log_report['status'], 'Field Write Error')) $result = db_query("UPDATE " . TABLE_PREFIX . "ldap_sync SET updated =
+			if ($synckey['updated'] != $this->changetime($user->whenchanged) || !$this->contains($this->log_report['status'], 'Error')) $result = db_query("UPDATE " . TABLE_PREFIX . "ldap_sync SET updated =
 								\"" . $this->changetime($user->whenchanged) . "\" WHERE id = " . $user->user_id);
 
 			$this->log_report['body'] .= "<tr>
@@ -356,7 +351,7 @@ class SyncLDAPMultiClass extends LDAPMultiAuthentication {
 			$res_ostagents = db_query($qry_ostagents);
 
 			// Update Header - Total of osTicket agents
-			$log_header .= ("Number of osTicket agents: " . db_num_rows($res_ostagents) . '<br>');
+			$log_header .= ("(" . db_num_rows($res_ostagents) . ") total agents <br>");
 			$this->sync_results['totalagents'] = db_num_rows($res_ostagents);
 
 			// Go thru every osTicket agent and modify every osTicket agents information
@@ -385,7 +380,7 @@ class SyncLDAPMultiClass extends LDAPMultiAuthentication {
 					// Mobile Number
 					if ($ad_users[$key]->mobile != $sql_ostagents['mobile']) {
 						$qry_update_ostagent_mobile = "UPDATE " . TABLE_PREFIX . "staff
-                       SET mobile='" . sanitize_phone($ad_users[$key]->mobile) . "'
+                       SET mobile='" . $this->sanitize_phone($ad_users[$key]->mobile) . "'
                        WHERE (" . TABLE_PREFIX . "staff.username='" . $ad_users[$key]->samaccountname . "')";
 						$updates[] = 'mobile';
 						$result = db_query($qry_update_ostagent_mobile);
@@ -425,8 +420,6 @@ class SyncLDAPMultiClass extends LDAPMultiAuthentication {
 				unset($sync["user_id"]);
 								
 				//Update any username changes
-				//$currentusername = db_result(db_query("SELECT username FROM `" . TABLE_PREFIX . "user_account` WHERE id ='". $uid ."'"));
-				//->samaccountname != $currentusername && $uid == $guid_users[$key]->user_id
 					if ($guiduser = $guid_users[$sync["guid"]]) {
 						if (!empty($sync['username']))
 							if ($guiduser->samaccountname !== $sync['username']){
@@ -437,8 +430,7 @@ class SyncLDAPMultiClass extends LDAPMultiAuthentication {
 				}	
 				$this->sync_info[$uid] = $sync;
 			}
-			
-			//echo json_encode($sync_info) ."</br>";
+
 			//Query only users that have no guid.
 			$qry_ostusers = db_query("SELECT " . TABLE_PREFIX . "user.id as user_id, 
 										" . TABLE_PREFIX . "user_email.id as email_id," . TABLE_PREFIX . "user.name, " . TABLE_PREFIX . "user_email.address as mail 
@@ -459,6 +451,9 @@ class SyncLDAPMultiClass extends LDAPMultiAuthentication {
                             values ('" . $sql_ostusers['user_id'] . "', '" . $ad_users[$key]->objectguid . "', '" . date('Y-m-d H:i:s') . "')
 							ON DUPLICATE KEY UPDATE id = \"" . $sql_ostusers['user_id'] . "\", guid = \"" . $ad_users[$key]->objectguid . "\", updated = \"" . date('Y-m-d H:i:s') . "\";");
 					}
+				} else {
+					if (!empty($this->config['debug-choice']) && $this->config['debug-choice'])
+							$this->log_report['debug']['notfound'][] = $sql_ostusers;
 				}
 			}
 
@@ -495,20 +490,23 @@ class SyncLDAPMultiClass extends LDAPMultiAuthentication {
 				}
 			}
 			//$log_header .= ("Users not Synced: " . db_num_rows($qry_ostusers) . '<br>');
-			$log_header .= ("(" . db_num_rows($qry_ostusers) . ') 	users not in ldap.<br>');
-			$log_header .= ("(" . ($g) . ') 	users renamed.<br>');			
-			$log_header .= ("(" . count($updateusers) . ') 	users synced.<br>');
+			$log_header = ("(" . db_num_rows($qry_ostusers) . ') users not in ldap.<br>');
+			$log_header = ("(" . (!empty($g) ? $g : '0') . ') users renamed.<br>');
+			$log_header = ("(" . count($updateusers) . ') users synced.<br>');
 			$this->sync_results['updatedusers'] = count($updateusers);
 			$this->update_users($updateusers);
 		}
 
 		//execution time of the script
 		$execution_time = $this->formatmilliseconds(number_format(microtime(true) - $sync_time_start, 3) * 1000);
-		$log_footer .= '    </tbody>
+		$log_footer = '    </tbody>
                                     </table>
 									<b>Total Execution Time:</b> ' . $execution_time . ' secs</br>';
+		//$log_debug = "</br><h2>Debug Info</h2> <hr></br>" . json_encode($this->log_report['debug']);
+		
 		$this->sync_results['executetime'] = $execution_time;
-		$msg = $log_header . $log_table . $this->log_report['agent'] . $this->log_report['body'] . $log_footer;
+		$msg = $log_header . $log_table . $this->log_report['agent'] . $this->log_report['body'] . $log_footer . $log_debug;
+
 		if ($this->sync_results['updatedusers'] >= 1 && $this->config['sync_reports'])
 			$this->sendAlertMsg($msg);
 		return $this->sync_results;
