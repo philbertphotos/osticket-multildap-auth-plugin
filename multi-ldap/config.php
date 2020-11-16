@@ -49,8 +49,11 @@ class LdapMultiAuthPluginConfig extends PluginConfig {
 			//echo $current_schedule.$new_schedule;
 			$json_str = db_fetch_row(db_query('SELECT value FROM ' . TABLE_PREFIX . 'config 
 						WHERE namespace = "plugin.' . $id . '" AND `key` = "sync_data";')) [0];
+			if (!empty($json_arr))
+				return false;
+				
 			$json_arr = json_decode($json_str);
-			$key = 'schedule';
+			$key = 'schedule';			
 			$json_arr->$key = strtotime($new_schedule);
 			$sql = 'UPDATE `' . TABLE_PREFIX . 'config` SET `value` = \'\', updated = CURRENT_TIMESTAMP
 							WHERE `key` = "sync_data" AND `namespace` = "plugin.' . $id . '";';
