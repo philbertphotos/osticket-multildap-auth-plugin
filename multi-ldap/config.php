@@ -18,7 +18,6 @@ class LdapMultiAuthPluginConfig extends PluginConfig {
 				,
 			);
 		}
-		$sync_schedule = $this->config['sync_schedule']->ht['value'];
 		return Plugin::translate('multiauth');
 	}
 
@@ -382,6 +381,7 @@ class LdapMultiAuthPluginConfig extends PluginConfig {
 				)
 			)) ,
 		);
+		$sync_schedule = $this->config['sync_schedule']->ht['value'];
 	}
 
 	function pre_save(&$config, &$errors) {
