@@ -340,20 +340,29 @@ class LdapMultiAuthPluginConfig extends PluginConfig {
 					'content' => __('
 		<script type="text/javascript">		
             $(function() {
-    		$(".sync").click(function() {
+    		$("#sync-btn").click(function() {
 						$.ajax({ //Send the val to php file using Ajax in POST method
 							type: "POST",
 							data: {data: "' . $this->section . '"},
-							url: "../scp/sync_mldap.php?ajax=true",
-							success: function(data) { // Get the result and assign to each cases
-								console.log(data);
-								var json = $.parseJSON(data);
+							url: "../scp/sync_mldap.php?sync=true&plugin='. basename(dirname(__FILE__)) .'",
+							success: function(data) {
+								try {
+									var json = $.parseJSON(data);
+								} catch (e) {
+									console.log("ERROR");
+									return;
+								}
+							$(this).closest("i").addClass("icon-spin");
+								if (json.result == 1) {
+									$(this).closest("i").removeClass("icon-spin");
+								}
+								console.log(json);
 							}
 						});
 					});
 				});
 			</script>
-			<div class="sync button">sync users <i class="icon-refresh"></i></div>')
+			<div id="sync-btn" class="button">sync users <i class="icon-refresh"></i></div>')
 					//icon-spin
 					
 				)
