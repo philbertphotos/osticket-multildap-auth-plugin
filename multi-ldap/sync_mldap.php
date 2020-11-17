@@ -1,4 +1,18 @@
 <?php
+//Check to see if user request a manual sync
+if ($_REQUEST['sync']){
+//Load Osticket environment
+file_exists('../main.inc.php') or die('System Error');
+if (!defined('DISABLE_SESSION'))
+    define('DISABLE_SESSION', true);
+
+require_once('../main.inc.php');
+require_once(INCLUDE_DIR.'class.http.php');
+require_once(INCLUDE_DIR.'class.api.php');
+require_once (INCLUDE_DIR . 'plugins/'.$_REQUEST['plugin'].'/auth.php');
+ini_set('memory_limit','512M');
+}
+
 class SyncLDAPMultiClass extends LDAPMultiAuthentication {
 	var $config;
 	var $sync_info;
@@ -512,4 +526,10 @@ class SyncLDAPMultiClass extends LDAPMultiAuthentication {
 		return $this->sync_results;
 	}
 }
+
+if ($_REQUEST['sync']){
+	$sync = new SyncLDAPMultiClass(explode('plugin.', $_REQUEST['data'])[1]);
+	$results = $sync->check_users();
+	return json_encode(array("info" => "done", "result" => $results));
+	}
 ?>
