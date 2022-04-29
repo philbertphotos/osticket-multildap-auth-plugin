@@ -19,6 +19,9 @@ Features
  
  ![Alt text](http://osticket.com/forum/uploads/FileUpload/08/6bb40e0ef6b5739ec010c9f1391a68.png "User lookup")
 
+Sync Email
+![image](https://user-images.githubusercontent.com/2892474/165946917-db6031dc-36ba-4470-8b54-b02154b50bfd.png)
+
 Installing
 ==========
 
