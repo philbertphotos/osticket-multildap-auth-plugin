@@ -86,7 +86,7 @@ class LdapMultiAuthPlugin extends Plugin {
 					$this->logger('warning', 'LDAP Sync', 'Sync executed on (' . ($excu) . ') next execution in (' . $nextexcu . ')');
 				}
 				else {
-					$this->logger('warning', 'LDAP Sync', 'Sync executed on (' . ($excu) . ') next execution in (' . $nextexcu . ')' . "Total ldapusers: (" . $results['totalldap'] . ") Total agents: (" . $results['totalagents'] . ") Total Updated Users: (" . $results['updatedusers'] . ") Execute Time: (" . $results['executetime'] . ")");
+					$this->logger('warning', 'LDAP Sync', '<div>Sync executed on (' . ($excu) . ')</div> <div>Next execution in (' . $nextexcu . ')</div>' . "<div>Total ldapusers: (" . $results['totalldap'] . ")</div> <div>Total agents: (" . $results['totalagents'] . ") </div>Total Updated Users: (" . $results['updatedusers'] . ") <div>Execute Time: (" . $results['executetime'] . ")</div>");
 				}
 			}
 		}
@@ -195,10 +195,8 @@ class LdapMultiAuthPlugin extends Plugin {
 	 *
 	 */
 	function logger($priority, $title, $message, $verbose = false) {
-		//if (!empty(self::getConfig()
-			//->get('debug-choice')) && self::getConfig()
-			//->get('debug-choice') && !$verbose || (self::getConfig()
-			//->get('debug-verbose') && $verbose)) {
+		if (!empty(self::getConfig()->get('debug-choice')) && self::getConfig()->get('debug-choice') && !$verbose 
+		|| (self::getConfig()->get('debug-verbose') && $verbose)) {
 				
 			if (is_array($message) || is_object($message)) {
 				$message = json_encode($message);
@@ -235,7 +233,7 @@ class LdapMultiAuthPlugin extends Plugin {
 			//Save log based on system log level settings.
 			$sql = 'INSERT INTO ' . SYSLOG_TABLE . ' SET created=NOW(), updated=NOW() ' . ',title=' . db_input(Format::sanitize($title, true)) . ',log_type=' . db_input($loglevel[$level]) . ',log=' . db_input(Format::sanitize($message, false)) . ',ip_address=' . db_input($_SERVER['REMOTE_ADDR']);
 			db_query($sql, false);
-		//}
+		}
 	}
 
 	/**
@@ -576,7 +574,8 @@ class LDAPMultiAuthentication {
 	}
 
 	function authOrCreate($username) {
-		global $cfg;
+		global $cfg, $ost;
+		//$registration = $ost->config->config[client_registration]->ht[value];
 		switch ($this->type) {
 			case 'staff':
 				if (($user = StaffSession::lookup($username)) && $user->getId()) {
@@ -663,6 +662,9 @@ class LDAPMultiAuthentication {
 			return null;
 	}
 
+	function create_account($username, $type) {
+	}
+	
 	function convert_user($ldap, $username) {
 		$filter = '(mail={q})';
 		if ($user_info = $ldap->getUsers($this->$username, $this->adschema() , $filter))
@@ -680,7 +682,7 @@ class LDAPMultiAuthentication {
 		$lookup_user = array();
 		preg_match('/(dc=(?:[^C]|C(?!N=))*)(?:;|$)/i', $lookup_dn, $match);
 		//preg_match('/(dc=)(.*?),.*/i', $lookup_dn, $match);
-		LdapMultiAuthPlugin::logger(LOG_INFO, 'ldap lookup (' . $lookup_dn . ')', $lookup_dn);
+		LdapMultiAuthPlugin::logger(LOG_DEBUG, 'ldap-lookup (' . $lookup_dn . ')', $lookup_dn);
 		$base_dn = strtolower($match[0]);
 
 		$key = array_search($base_dn, preg_split('/;/', strtolower($this->getConfig()
@@ -784,7 +786,7 @@ class LDAPMultiAuthentication {
 				LdapMultiAuthPlugin::logger('info', 'search-error', $ldap->ldapErrorCode . " - " . $ldap->ldapErrorText);
 			}
 		}
-		LdapMultiAuthPlugin::logger('info', 'ldap search (' . $query . ')', json_encode($combined_userlist), true);
+		LdapMultiAuthPlugin::logger(LOG_DEBUG, 'ldap-search (' . $query . ')', json_encode($combined_userlist), true);
 		return $combined_userlist;
 	}
 }
@@ -833,7 +835,7 @@ class StaffLDAPMultiAuthentication extends StaffAuthenticationBackend implements
 			$l['backend'] = static ::$id;
 			$l['id'] = static ::$id . ':' . $l['dn'];
 		}
-		LdapMultiAuthPlugin::logger('info', 'search-result', $list, true);
+		LdapMultiAuthPlugin::logger('debug', 'search-result', $list, true);
 		return $list;
 	}
 }
