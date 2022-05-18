@@ -53,7 +53,7 @@ class LdapMultiAuthPluginConfig extends PluginConfig {
 				return false;
 				
 			$json_arr = json_decode($json_str);
-			$key = 'schedule';			
+			$key = 'schedule';
 			$json_arr->$key = strtotime($new_schedule);
 			$sql = 'UPDATE `' . TABLE_PREFIX . 'config` SET `value` = \'\', updated = CURRENT_TIMESTAMP
 							WHERE `key` = "sync_data" AND `namespace` = "plugin.' . $id . '";';
@@ -253,27 +253,6 @@ class LdapMultiAuthPluginConfig extends PluginConfig {
 					'desc' => $__('Reset/Update schedule on save')
 				)
 			)) ,
-		  /*'sync_schedule' => new ChoiceField(
-			array(
-			  'label' => $__(''),
-			  'default' => "ALL",
-			  'hint' => $__(
-				''),
-			  'choices' => array(
-				"NONE" => '0',
-				'1' => '1',
-				'2' => '2',
-				'3' => '3',
-				'4' => '4',
-				'5' => '5',
-				'6' => '6',
-				'7' => '7',
-				'8' => '8',
-				'9' => '9',
-				'10' => '10',
-				"ALL" => $__('All') // Woo.
-			  )
-			)),			*/
 			'sync_schedule_show' => new SectionBreakField(array(
 				'label' => $__('Next schedule: ' . $this->getschedule()) ,
 				'hint' => $__('Last run: ' . $this->getlastschedule()) ,
@@ -400,6 +379,7 @@ class LdapMultiAuthPluginConfig extends PluginConfig {
 		require_once ('class.AuthLdap.php');
 		list($__, $_N) = self::translate();
 		global $ost;
+		$id = substr($this->section, -1);
 		if ($ost && !extension_loaded('ldap')) {
 			$ost->setWarning($__('LDAP extension is not available'));
 			$errors['err'] = $__('LDAP extension is not available. Please
@@ -407,7 +387,12 @@ class LdapMultiAuthPluginConfig extends PluginConfig {
                 server');
 			return;
 		}
-		if (!$config['basedn']) {
+		
+		$chk_sync = db_fetch_row(db_query("SELECT * FROM " . TABLE_PREFIX . "config WHERE `namespace` = 'plugin." . $id . "' AND `key` = 'sync_data';"));
+			if (empty($chk_sync))
+				db_query("INSERT INTO " . TABLE_PREFIX . "config (`namespace`, `key`, `value`, `updated`) VALUES ('plugin." . $id . "', 'sync_data', '', '" .date("Y-m-d H:i:s"). "');");
+
+	if (!$config['basedn']) {
 			if (!($servers = LDAPAuthentication::connectcheck($config['servers']))) $this->getForm()
 				->getField('basedn')
 				->addError($__("No basedn specified. Example of DN attributes 'dc=foo,dc=com'."));
