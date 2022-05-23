@@ -1,5 +1,5 @@
 <?php
-if ($_REQUEST['sync']){
+if ($_REQUEST['sync'] || $_REQUEST['check']){
 //Load Osticket environment
 file_exists('../main.inc.php') or die('System Error');
 if (!defined('DISABLE_SESSION'))
@@ -19,6 +19,60 @@ class SyncLDAPMultiClass extends LDAPMultiAuthentication {
 		$this->config = self::getconfig($id);	
 	}
 
+
+function _connectcheck() {
+        $conninfo = array();
+        $ldapinfo = array();
+		
+		foreach (preg_split('/;/', $this->config['basedn']) as $i => $dn) {
+			$dn = trim($dn);
+			$servers = $this->config['servers'];
+			$serversa = preg_split('/\s+/', $servers);
+
+			$sd = $this->config['shortdomain'];
+			$sda = preg_split('/;|,/', $sd);
+
+			$bind_dn = $this->config['bind_dn'];
+			$bind_dna = preg_split('/;/', $bind_dn) [$i];
+
+			$bind_pw = $this->config['bind_pw'];
+			$bind_pwa = preg_split('/;|,/', $bind_pw) [$i];
+
+			$ldapinfo[] = array(
+				'dn' => $dn,
+				'sd' => $sda[$i],
+				'servers' => trim($serversa[$i]) ,
+				'bind_dn' => trim($bind_dna) ,
+				'bind_pw' => trim($bind_pwa)
+			);
+		}	
+		
+        foreach ($ldapinfo as $data) {
+            $ldap = new AuthLdap();
+            $ldap->serverType = 'ActiveDirectory';
+            $ldap->server = preg_split('/;|,/', $data['servers']);
+            $ldap->domain = $data['sd'];
+            $ldap->dn = $data['dn'];
+            $ldap->useSSL = $data['ssl'];
+
+            if ($ldap->connect()) {
+                $conninfo[] = array(
+                    'bool' => true,
+                    'msg' => $data['sd'] . ' Connected OK!'
+                );
+            }
+            else {
+                $conninfo[] = array(
+                    false,
+                    $data['sd'] . " error:" . $ldap->ldapErrorCode . ": " . $ldap->ldapErrorText
+                );
+            }
+        }
+	
+		echo json_encode($conninfo);
+        //return $conninfo;
+    }
+	
 	function user_list() {
 		$userlist = array();
 		$ldapinfo;
@@ -530,7 +584,15 @@ if ($_REQUEST['sync']){
 	require_once (INCLUDE_DIR . 'plugins/'.$_REQUEST['plugin'].'/auth.php');
 	$sync = new SyncLDAPMultiClass(explode('plugin.', $_REQUEST['data'])[1]);
 	$results = $sync->check_users();
-	echo json_encode(array("info" => "done", "result" => $results));
+	echo json_encode(($results));
+	}
+if ($_REQUEST['check']){
+	ini_set('memory_limit','512M');
+	//require_once(INCLUDE_DIR.'class.http.php');
+	require_once(INCLUDE_DIR.'class.api.php');
+	require_once (INCLUDE_DIR . 'plugins/'.$_REQUEST['plugin'].'/auth.php');
+	$sync = new SyncLDAPMultiClass(explode('plugin.', $_REQUEST['data'])[1]);
+	$results = $sync->_connectcheck();
 	}
 
 ?>
