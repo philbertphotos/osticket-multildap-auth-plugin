@@ -1,5 +1,4 @@
 <?php
-//Check to see if user request a manual sync
 if ($_REQUEST['sync']){
 //Load Osticket environment
 file_exists('../main.inc.php') or die('System Error');
@@ -7,12 +6,9 @@ if (!defined('DISABLE_SESSION'))
     define('DISABLE_SESSION', true);
 
 require_once('../main.inc.php');
-require_once(INCLUDE_DIR.'class.http.php');
-require_once(INCLUDE_DIR.'class.api.php');
-require_once (INCLUDE_DIR . 'plugins/'.$_REQUEST['plugin'].'/auth.php');
-ini_set('memory_limit','512M');
-}
 
+}
+	
 class SyncLDAPMultiClass extends LDAPMultiAuthentication {
 	var $config;
 	var $sync_info;
@@ -20,7 +16,7 @@ class SyncLDAPMultiClass extends LDAPMultiAuthentication {
 	var $sync_results;
 
 	public function __construct($id) {
-		$this->config = self::getconfig($id);
+		$this->config = self::getconfig($id);	
 	}
 
 	function user_list() {
@@ -132,15 +128,15 @@ class SyncLDAPMultiClass extends LDAPMultiAuthentication {
 		return rtrim($time, '0');
 	}
 
-	public function getconfig($id = '' , $_ = null) {
-		$this->configvalues;
+	public static function getconfig($id = '' , $_ = null) {
+		$configvalues;
 		$sql = "SELECT `key`,`value` FROM " . TABLE_PREFIX . "config WHERE `namespace` = 'plugin." . $id . "';";
 		$result = db_query($sql);
 
 		while ($row = db_fetch_array($result)) {
-			$this->configvalues[$row['key']] = $row['value'];
+			$configvalues[$row['key']] = $row['value'];
 		}
-		return $this->configvalues;
+		return $configvalues;
 	}
 
 	//Sanitize Number and add the correct extention format.
@@ -528,8 +524,13 @@ class SyncLDAPMultiClass extends LDAPMultiAuthentication {
 }
 
 if ($_REQUEST['sync']){
+	ini_set('memory_limit','512M');
+	//require_once(INCLUDE_DIR.'class.http.php');
+	require_once(INCLUDE_DIR.'class.api.php');
+	require_once (INCLUDE_DIR . 'plugins/'.$_REQUEST['plugin'].'/auth.php');
 	$sync = new SyncLDAPMultiClass(explode('plugin.', $_REQUEST['data'])[1]);
 	$results = $sync->check_users();
-	return json_encode(array("info" => "done", "result" => $results));
+	echo json_encode(array("info" => "done", "result" => $results));
 	}
+
 ?>
