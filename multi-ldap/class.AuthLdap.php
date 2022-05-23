@@ -1,6 +1,6 @@
 <?php
 /**
- * class.AuthLdap.php , version 1.1
+ * class.AuthLdap.php , version 1.2
  * Joseph Philbert, October 2015
  * Provides LDAP authentication and user functions.
  *
@@ -109,13 +109,14 @@ class AuthLdap {
      * @param string the username to authenticate with when searching if anonymous binding is not supported
      * @param string the password to authenticate with when searching if anonymous binding is not supported
      */
-    function AuthLdap ($sLdapServer = "", $sBaseDN = "", $sServerType = "", $sDomain = "", $searchUser = "", $searchPassword = "") {
+    function AuthLdap ($sLdapServer = "", $sBaseDN = "", $sServerType = "", $sDomain = "", $searchUser = "", $searchPassword = "", $useSSL = false) {
         @$this->server = array($sLdapServer);
         @$this->dn = $sBaseDN;
         @$this->serverType = $sServerType;
         $this->domain = $sDomain;
         $this->searchUser = $searchUser;
         $this->searchPassword = $searchPassword;
+        $this->useSSL = $useSSL;
     }
     
     // 2.1 Connection handling methods -------------------------------------------
@@ -129,7 +130,14 @@ class AuthLdap {
      */
     function connect() {
         foreach ($this->server as $key => $host) {
-            $this->connection = ldap_connect( $host);
+            //$this->connection = ldap_connect( $host);
+			
+			if ($this->useSSL) {
+				$this->connection = ldap_connect("ldaps://" . $host);
+			} else {
+				$this->connection = ldap_connect($host);
+			}
+		
 			ldap_set_option ($this->connection, LDAP_OPT_REFERRALS, 0) or die('Unable to set LDAP opt referrals');
 			ldap_set_option($this->connection, LDAP_OPT_PROTOCOL_VERSION, 3) or die('Unable to set LDAP protocol version');
 			ldap_set_option($this->connection, LDAP_OPT_TIMELIMIT, 5) or die('Timelimit reached');
@@ -508,14 +516,17 @@ class AuthLdap {
             }
         }
 
-        if ( !@asort( $userslist)) {
+        //if ( !@asort( $userslist)) {
+        if ( empty( $userslist)) {
             /* Sort into alphabetical order. If this fails, it's because there
             ** were no results returned (array is empty) - so just return false.
             */
+			
             $this->ldapErrorCode = -1;
             $this->ldapErrorText = "(" . ldap_error($this->connection).") No users found matching search criteria ".$search;
             return false;
-        }
+			}
+
         return $userslist;
     }
 
