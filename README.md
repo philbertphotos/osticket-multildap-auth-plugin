@@ -1,7 +1,7 @@
-#Multi LDAP authentication and LDAP Sync for osTicket v1.4
+#Multi LDAP authentication and LDAP Sync for osTicket v1.5.1
 =====================================
 Plugin for OS Ticket that allows for authentication with multiple domains and servers for agents and/or clients on osTicket also syncs user defined attributes from AD LDAP. 
-Works and tested with version 1.10 to v1.15.6
+Works and tested with version 1.10 to v1.16.3
 
 Features
 ========
@@ -16,6 +16,7 @@ Features
  - Custom defined ldap map attributes 
  - Keeps track of updated users
  - Schedule is activated based on the cron job
+ - manual sync button
  
  ![Alt text](http://osticket.com/forum/uploads/FileUpload/08/6bb40e0ef6b5739ec010c9f1391a68.png "User lookup")
 
@@ -44,6 +45,7 @@ It syncs both the agents and users without issues with about 1000+ users registe
 
 Roadmap
 ==========
+Bug fixes
 Ldap caching for large LDAP domains
 Planning on adding a TAB feature to make setting section easier to manage.
 
