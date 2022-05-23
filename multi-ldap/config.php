@@ -168,6 +168,43 @@ class LdapMultiAuthPluginConfig extends PluginConfig {
                     'length' => 120
                 ) ,
             )) ,
+            'sync_check' => new FreeTextField(array(
+                'configuration' => array(
+                    'content' => __('
+		<script type="text/javascript">		
+            $(function() {
+    		$("#sync-check").click(function() {
+						$.ajax({ //Send the val to php file using Ajax in POST method
+							type: "POST",
+							data: {data: "' . $this->section . '"},
+							url: "../scp/sync_mldap.php?check=true&plugin=' . basename(dirname(__FILE__)) . '",
+							success: function(data) {
+								try {
+									var json = $.parseJSON(data);
+									//alert(json[0][msg]);
+									$.each(json , function(index, val) { 
+										  //console.log(index, val)
+										  alert(val["msg"])
+										});
+								} catch (e) {
+									console.log("ERROR");
+									return;
+								}
+							$(this).closest("i").addClass("icon-spin");
+								if (json.result == 1) {
+									$(this).closest("i").removeClass("icon-spin");
+								}
+								console.log(json);
+							}
+						});
+					});
+				});
+			</script>
+			<div id="sync-check" class="button">check connection <i class="icon-refresh"></i></div>')
+                    //icon-spin
+                    
+                )
+            )) ,			
             'auth' => new SectionBreakField(array(
                 'label' => $__('Authentication Modes') ,
                 'hint' => $__('Authentication modes for clients and staff
@@ -331,6 +368,7 @@ class LdapMultiAuthPluginConfig extends PluginConfig {
 							success: function(data) {
 								try {
 									var json = $.parseJSON(data);
+									alert("Sync Completed " + json["totalldap"] + " users found");
 								} catch (e) {
 									console.log("ERROR");
 									return;
