@@ -133,7 +133,7 @@ class LdapMultiAuthPlugin extends Plugin {
                 $nextexcu = $this->DateFromTimezone(strftime("%Y-%m-%d %H:%M", $this->nextExec) , 'UTC', $this->time_zone, 'F d Y g:i a');
 
                 $results = $sync->check_users();
-                logger('warning', 'check_users results', json_encode($results));
+                //logger('warning', 'check_users results', json_encode($results));
                 if (empty($results)) {
                     $this->log('warning', 'LDAP Sync1', 'Sync executed on (' . ($excu) . ') next execution in (' . $nextexcu . ')');
                     logger('warning', 'LDAP Sync', 'Sync executed on (' . ($excu) . ') next execution in (' . $nextexcu . ')');
