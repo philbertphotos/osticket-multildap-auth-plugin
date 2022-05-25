@@ -874,7 +874,7 @@ class StaffLDAPMultiAuthentication extends StaffAuthenticationBackend implements
             $list['backend'] = static ::$id;
             $list['id'] = static ::$id . ':' . $list['dn'];
         }
-        LDAPMultiAuthentication::logger('warning', 'lookup-result', $list, true);
+        logger('warning', 'lookup-result', $list, true);
         return ($list);
     }
 
