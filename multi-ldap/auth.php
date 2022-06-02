@@ -49,9 +49,8 @@ function logger($priority, $title, $message, $verbose = false) {
         'Warning',
         'Debug'
     );
-    $ost->logInfo('old', "test", false);
 
-    //Save log based on system log level settings.
+	//Save log based on system log level settings.
     $sql = 'INSERT INTO ' . SYSLOG_TABLE . ' SET created=NOW(), updated=NOW() ' . ',title=' . db_input(Format::sanitize($title, true)) . ',log_type=' . db_input($loglevel[$level]) . ',log=' . db_input(Format::sanitize($message, false)) . ',ip_address=' . db_input($_SERVER['REMOTE_ADDR']);
     db_query($sql, false);
     // }
