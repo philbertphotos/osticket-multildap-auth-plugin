@@ -423,6 +423,8 @@ class LdapMultiAuthPluginConfig extends PluginConfig {
         list($__, $_N) = self::translate();
         global $ost;
         $id = substr($this->section, -1);
+		$mld = new LDAPMultiAuthentication($config);
+		
         if ($ost && !extension_loaded('ldap')) {
             $ost->setWarning($__('LDAP extension is not available'));
             $errors['err'] = $__('LDAP extension is not available. Please
@@ -435,7 +437,8 @@ class LdapMultiAuthPluginConfig extends PluginConfig {
         if (empty($chk_sync)) db_query("INSERT INTO " . TABLE_PREFIX . "config (`namespace`, `key`, `value`, `updated`) VALUES ('plugin." . $id . "', 'sync_data', '', '" . date("Y-m-d H:i:s") . "');");
 
         if (!$config['basedn']) {
-            if (!($servers = LDAPMultiAuthentication::connectcheck($config['servers']))) $this->getForm()
+			
+            if (!($servers = $mld->connectcheck($config['servers']))) $this->getForm()
                 ->getField('basedn')
                 ->addError($__("No basedn specified. Example of DN attributes 'dc=foo,dc=com'."));
         }
@@ -485,7 +488,7 @@ class LdapMultiAuthPluginConfig extends PluginConfig {
             );
         }
 
-        foreach (LDAPMultiAuthentication::connectcheck($ldapdata) as $i => $connerror) {
+        foreach ($mld->connectcheck($ldapdata) as $i => $connerror) {
             if (!$connerror['bool']) {
                 $this->getForm()
                     ->getField('servers')
@@ -494,7 +497,7 @@ class LdapMultiAuthPluginConfig extends PluginConfig {
             }
         }
 
-        //LDAPMultiAuthentication::updateSchedule();
+        //$mld->updateSchedule();
         global $msg;
         if (!$errors) $msg = $__('LDAP configuration updated successfully');
         return !$errors;
