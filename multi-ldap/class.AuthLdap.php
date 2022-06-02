@@ -479,7 +479,7 @@ class AuthLdap {
 
 		// Checks for custom filter replaces all {q} with $search string.
 		if ($filter == null) {
-			$filter = $this->getUserIdentifier() . "=$search*";
+			$filter = $this->getUserIdentifier() . "=$search";
 		} else {
 			$filter = str_replace("{q}", "$search", $filter);
 		}
