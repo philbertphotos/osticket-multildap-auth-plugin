@@ -18,12 +18,16 @@ Features
  - Schedule is activated based on the cron job
  - manual sync button
  
- ![Alt text](http://osticket.com/forum/uploads/FileUpload/08/6bb40e0ef6b5739ec010c9f1391a68.png "User lookup")
+ User Lookup
+ 
+![image](http://osticket.com/forum/uploads/FileUpload/08/6bb40e0ef6b5739ec010c9f1391a68.png)
 
 Sync Email
+
 ![image](https://user-images.githubusercontent.com/2892474/165946917-db6031dc-36ba-4470-8b54-b02154b50bfd.png)
 
 Example of sync report in my environment.
+
 ![image](https://user-images.githubusercontent.com/2892474/173095409-b31fb9a6-bf32-4a0a-b40a-b01f284ea19f.png)
 
 
