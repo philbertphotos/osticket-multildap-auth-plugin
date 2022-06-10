@@ -19,6 +19,7 @@ Features
  - manual sync button
  
  User Lookup
+ 
  ![image](https://user-images.githubusercontent.com/2892474/173096208-20841dbe-53d0-4cd8-b29e-28067572dac1.png)
 
 Sync Email
