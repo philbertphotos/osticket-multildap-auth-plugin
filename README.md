@@ -19,8 +19,7 @@ Features
  - manual sync button
  
  User Lookup
- 
-![image](http://osticket.com/forum/uploads/FileUpload/08/6bb40e0ef6b5739ec010c9f1391a68.png)
+ ![image](https://user-images.githubusercontent.com/2892474/173096208-20841dbe-53d0-4cd8-b29e-28067572dac1.png)
 
 Sync Email
 
