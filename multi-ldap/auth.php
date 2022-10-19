@@ -646,7 +646,7 @@ class LDAPMultiAuthentication {
 						$ldap->domain = $data['sd'];
 						$ldap->dn = $data['dn'];
 
-						if ($ldap->checkGroup($name, $staff_group)) {
+						if ($ldap->checkGroup($username, $staff_group)) {
 							$chkgroup = true;
 							break 2;
 						}
