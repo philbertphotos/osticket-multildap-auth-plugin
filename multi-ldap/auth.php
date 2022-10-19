@@ -639,10 +639,19 @@ class LDAPMultiAuthentication {
                         ->get('multiauth-staff-group'));
                     $chkgroup;
                     foreach ($staff_groups as $staff_group) {
-                        if ($ldap->checkGroup($name, $staff_group)) {
-                            $chkgroup = true;
-                            break;
-                        }
+						foreach ($this->ldapinfo() as $data) {
+						$ldap = new AuthLdap();
+						$ldap->serverType = 'ActiveDirectory';
+						$ldap->server = preg_split('/;|,/', $data['servers']);
+						$ldap->domain = $data['sd'];
+						$ldap->dn = $data['dn'];
+
+						if ($ldap->checkGroup($name, $staff_group)) {
+							$chkgroup = true;
+							break 2;
+						}
+
+					}
                     }
 
                     if ($config->get('multiauth-staff-register') && $chkgroup) {
