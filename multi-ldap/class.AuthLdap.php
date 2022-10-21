@@ -1,6 +1,6 @@
 <?php
 /**
- * class.AuthLdap.php , version 1.2
+ * class.AuthLdap.php , version 1.4
  * Joseph Philbert, October 2015
  * Provides LDAP authentication and user functions.
  *
@@ -24,8 +24,14 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  *
- * ChangeLog
+ * ChangeLog2
  * ---------
+  * version 1.4, 10.03.2022, Joseph Philbert <joe@philbertphotos.com> 
+ * Added utility functions and fixed buggy functions 
+ * 
+  * version 1.3, 01.03.2020, Joseph Philbert <joe@philbertphotos.com> 
+ * Cleaned up code
+ *
  * version 1.1, 08.03.2016, Joseph Philbert <joe@philbertphotos.com> 
  * Added ObjectSid and ObjectGUID functions
  * Uploaded to Github
@@ -109,14 +115,13 @@ class AuthLdap {
      * @param string the username to authenticate with when searching if anonymous binding is not supported
      * @param string the password to authenticate with when searching if anonymous binding is not supported
      */
-    function AuthLdap ($sLdapServer = "", $sBaseDN = "", $sServerType = "", $sDomain = "", $searchUser = "", $searchPassword = "", $useSSL = false) {
+    function AuthLdap ($sLdapServer = "", $sBaseDN = "", $sServerType = "", $sDomain = "", $searchUser = "", $searchPassword = "") {
         @$this->server = array($sLdapServer);
         @$this->dn = $sBaseDN;
         @$this->serverType = $sServerType;
         $this->domain = $sDomain;
         $this->searchUser = $searchUser;
         $this->searchPassword = $searchPassword;
-        $this->useSSL = $useSSL;
     }
     
     // 2.1 Connection handling methods -------------------------------------------
@@ -130,14 +135,7 @@ class AuthLdap {
      */
     function connect() {
         foreach ($this->server as $key => $host) {
-            //$this->connection = ldap_connect( $host);
-			
-			if ($this->useSSL) {
-				$this->connection = ldap_connect("ldaps://" . $host);
-			} else {
-				$this->connection = ldap_connect($host);
-			}
-		
+            $this->connection = ldap_connect( $host);
 			ldap_set_option ($this->connection, LDAP_OPT_REFERRALS, 0) or die('Unable to set LDAP opt referrals');
 			ldap_set_option($this->connection, LDAP_OPT_PROTOCOL_VERSION, 3) or die('Unable to set LDAP protocol version');
 			ldap_set_option($this->connection, LDAP_OPT_TIMELIMIT, 5) or die('Timelimit reached');
@@ -360,45 +358,19 @@ class AuthLdap {
         $checkDn = $this->setDn(false);
 
         // We need to search for the group in order to get it's entry.
-        $this->result = @ldap_search( $this->connection, $checkDn, "cn=" .$group);
-        $info = @ldap_get_entries( $this->connection, $this->result);
-
-        // Only one entry should be returned(no groups will have the same name)
-        $entry = ldap_first_entry( $this->connection,$this->result);
+		$this->result = ldap_search($this->connection, $checkDn, "(&(sAMAccountName=$uname))", array('memberOf' ));
+		$entry = $this->cleanEntry(ldap_get_entries($this->connection, $this->result))->memberof;
+	
+		foreach ($entry as $val){
+			$grp = str_replace('CN=', '', explode(",",$val)[0]);
+			if (strtolower($grp) == strtolower($group))
+				return true;
+		}
 
         if ( !$entry) {
             $this->ldapErrorCode = ldap_errno( $this->connection);
-            $this->ldapErrorText = ldap_error( $this->connection);
-            return false;  // Couldn't find the group...
-        }
-        // Get all the member DNs
-        if ( !$values = @ldap_get_values( $this->connection, $entry, "uniqueMember")) {
-            $this->ldapErrorCode = ldap_errno( $this->connection);
-            $this->ldapErrorText = ldap_error( $this->connection);
-            return false; // No users in the group
-        }
-
-        foreach ( $values as $key => $value) {
-            /* Loop through all members - see if the uname is there...
-            ** Also check for sub-groups - this allows us to define a group as
-            ** having membership of another group.
-            ** FIXME:- This is pretty ugly code and unoptimised. It takes ages
-            ** to search if you have sub-groups.
-            */
-            list( $cn,$ou) = explode( ",",$value);
-            list( $ou_l,$ou_r) = explode( "=",$ou);
-
-            if ( $this->groups==$ou_r) {
-                list( $cn_l,$cn_r) = explode( "=",$cn);
-                // OK, So we now check the sub-group...
-                if ( $this->checkGroup ( $uname,$cn_r)) {
-                    return true;
-                }
-            }
-
-            if ( preg_match( "/$uname/i",$value)) {
-                return true;
-            }
+            $this->ldapErrorText = ldap_error( 'user not in group');
+            return false;  // Couldn't find user in group...
         }
     }
 
@@ -408,31 +380,30 @@ class AuthLdap {
      * For most searches, this will just be one row, but sometimes multiple
      * results are returned (eg:- multiple email addresses)
      */
-    function getAttribute ( $uname,$attribute) {
+    function getAttribute ( $uname,$attribute, $raw = false) {
         // builds the appropriate dn, based on whether $this->people and/or $this->group is set
         $checkDn = $this->setDn( true);
-        $results[0] = $attribute;
+        $results = array($attribute);
 
         // We need to search for this user in order to get their entry.
-        $this->result = @ldap_search( $this->connection,$checkDn,$this->getUserIdentifier()."=$uname",$results);
+        $this->result = ldap_search( $this->connection,$checkDn,"(&(sAMAccountName=$uname))",$results);
         // Only one entry should ever be returned (no user will have the same uid)
-        $entry = 'samaccountname';//ldap_first_entry( $this->connection, $this->result);
+		$entry = ldap_get_entries($this->connection, $this->result);
 
         if ( !$entry) {
             $this->ldapErrorCode = -1;
-            $this->ldapErrorText = "Couldn't find user";
+            $this->ldapErrorText = "Couldn't find attribute";
             return false;  // Couldn't find the user...
-        }
+        } else {
+			if (!$raw) {
+			$value = $entry[0][$attribute][0];
+			} else {
+				$value = $entry[0];
+			}
+		}
 
-        // Get all the member DNs
-        if ( !$values = @ldap_get_values( $this->connection, $entry, $attribute)) {
-            $this->ldapErrorCode = ldap_errno( $this->connection);
-            $this->ldapErrorText = ldap_error( $this->connection);
-            return false; // No matching attributes
-        }
-
-        // Return an array containing the attributes.
-        return $values;
+        // Return attribute.
+        return $value;
     }
 
     /**
@@ -440,23 +411,31 @@ class AuthLdap {
      * This can only usually be done after an authenticated bind as a
      * directory manager - otherwise, read/write access will not be granted.
      */
-    function setAttribute( $uname, $attribute, $value) {
-        // Construct a full DN...
-        // builds the appropriate dn, based on whether $this->people and/or $this->group is set
-        $attrib_dn = $this->getUserIdentifier()."=$uname," . $this->setDn(true);
+    function setAttribute( $uname, $attributes) {
+		 $userDn = $this->userDn($uname);
+		 if ($userDn === false) return false; 
+		
+		if (!$attributes) return (false);
 
-        $info[$attribute] = $value;
-        // Change attribute
-        $this->result = ldap_modify( $this->connection, $attrib_dn, $info);
-        if ( $this->result) {
-            // Change went OK
-            return true;
-        } else {
-            // Couldn't change password...
-            $this->ldapErrorCode = ldap_errno( $this->connection);
-            $this->ldapErrorText = ldap_error( $this->connection);
-            return false;
-        }
+		//Check for NULL values
+		foreach($attributes as $key => $attribute) {
+			 // Change attribute
+			if(empty(trim($attribute))){
+				$this->result = ldap_modify( $this->connection, $userDn, array($key=>array()));
+				} else {
+				$this->result = ldap_modify( $this->connection, $userDn, array($key=>$attribute));
+			}
+			if (is_array($attribute)){
+				$this->result = ldap_modify( $this->connection, $userDn, array($key=>$attribute));
+			}
+			 if ($this->result == false){
+				$this->ldapErrorCode = ldap_errno( $this->connection);
+				$this->ldapErrorText = "Could not modify attribute"; 
+				return false; 
+			 }
+		}
+        
+        return true;		
     }
 
     // 2.5 User methods ----------------------------------------------------------
@@ -479,7 +458,7 @@ class AuthLdap {
 
 		// Checks for custom filter replaces all {q} with $search string.
 		if ($filter == null) {
-			$filter = $this->getUserIdentifier() . "=$search";
+			$filter = $this->getUserIdentifier() . "=$search*";
 		} else {
 			$filter = str_replace("{q}", "$search", $filter);
 		}
@@ -516,17 +495,14 @@ class AuthLdap {
             }
         }
 
-        //if ( !@asort( $userslist)) {
-        if ( empty( $userslist)) {
+        if ( !@is_array( $userslist)) {
             /* Sort into alphabetical order. If this fails, it's because there
             ** were no results returned (array is empty) - so just return false.
             */
-			
             $this->ldapErrorCode = -1;
             $this->ldapErrorText = "(" . ldap_error($this->connection).") No users found matching search criteria ".$search;
             return false;
-			}
-
+        }
         return $userslist;
     }
 
@@ -646,6 +622,69 @@ class AuthLdap {
         return $checkDn;
     }
 
+    /**
+    * Take an LDAP query and return the clean names, without all the LDAP prefixes (eg. CN, DN)
+    *
+    * @param array $groups
+    * @return array
+    */
+    public function cleanNames($groups)
+    {
+
+        $groupArray = array();
+        for ($i=0; $i<$groups["count"]; $i++){ // For each group
+            $line = $groups[$i];
+            
+            if (strlen($line)>0) { 
+                // More presumptions, they're all prefixed with CN=
+                // so we ditch the first three characters and the group
+                // name goes up to the first comma
+                $bits=explode(",", $line);
+                $groupArray[] = substr($bits[0], 3, (strlen($bits[0])-3));
+            }
+        }
+        return $groupArray;    
+    }
+	
+    /**
+    * Obtain the user's distinguished name based on their userid 
+    * 
+    * 
+    * @param string $username The username
+    * @return string
+    */
+    public function userDn($uname)
+    {
+        $user = $this->getAttribute($uname, "cn", true);
+        if ($user["dn"] === NULL) { 
+            return false; 
+        }
+        return $user["dn"];
+    }
+	
+	/**
+     * Convert LDAP resulting array to clean entries array with attributes and values
+     *
+     * @param $resultArray
+     * @return array
+     */
+		function cleanEntry($values) {
+			$object = new stdClass();
+		foreach ($values[0] as $key => $value) {
+			if(preg_match('/(?<!\S)\d{1,2}(?![^\s.,?!])/', $key) > 0 || $key == 'count')
+				continue;	
+					if ($key == 'dn') {
+					$object->$key = $value;
+					} else if ($value['count'] > 1){
+						unset($value['count']);
+						$object->$key = $value;
+					} else {
+						$object->$key = $value[0];	
+					}
+				}
+		return $object;
+		}
+	
     /**
     * Get the RootDSE properties from a domain controller
     * 
