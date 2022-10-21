@@ -587,7 +587,6 @@ class LDAPMultiAuthentication {
 
 	function authOrCreate($username) {
 		global $cfg, $ost;
-		//$registration = $ost->config->config[client_registration]->ht[value];
 		switch ($this->type) {
 			case 'staff':
 				if (($user = StaffSession::lookup($username)) && $user->getId()) {
@@ -605,23 +604,45 @@ class LDAPMultiAuthentication {
 						$ldap = new AuthLdap();
 						$ldap->serverType = 'ActiveDirectory';
 						$ldap->server = preg_split('/;|,/', $data['servers']);
-						$ldap->domain = $data['sd'];
 						$ldap->dn = $data['dn'];
+						$ldap->domain = $data['sd'];
+						$ldap->searchUser = $data['bind_dn'];
+						$ldap->searchPassword = $data['bind_pw'];
+						
+						if ($ldap->connect()) {
+							if ($ldap->checkGroup($username, $staff_group)) {
+								$chkgroup = true;
+								break 2;
+							}
+							else {
+								$conninfo[] = array(
+									false,
+									$data['sd'] . " error: " . $ldap->ldapErrorCode . " - " . $ldap->ldapErrorText
+								);
 
-						if ($ldap->checkGroup($username, $staff_group)) {
-							$chkgroup = true;
-							break 2;
+								//$ost->logWarning('ldap checkgrp (' . $username . ')', $conninfo[1], false);
+							}
 						}
+						else {
+							$conninfo[] = array(
+								false,
+								$data['sd'] . " error: " . $ldap->ldapErrorCode . " - " . $ldap->ldapErrorText
+							);
 
+							//LdapMultiAuthPlugin::logger('info', 'ldap-ConnInfo', $conninfo);
+						}
+						}
 					}
-					}
-					
-					if ($config->get('multiauth-staff-register') && $chkgroup) {
+					if ($this->getConfig()->get('multiauth-staff-register') && $chkgroup) {
 						if (!($info = $this->search($username, false))) {
 							return;
 						}
 						$errors = array();
 						$staff = array();
+
+						$staff['do'] = 'create';
+						$staff['add'] = 'a';
+						$staff['id'] = '';
 						$staff['username'] = $info['username'];
 						$staff['firstname'] = $info['first'];
 						$staff['lastname'] = $info['last'];
@@ -630,15 +651,23 @@ class LDAPMultiAuthentication {
 						$staff['isactive'] = 1;
 						$staff['group_id'] = 1;
 						$staff['dept_id'] = 1;
-						$staff['welcome_email'] = "on";
-						$staff['timezone_id'] = 8;
+						$staff['role_id'] = 1;
+						$staff['backend'] = "ldap";
+						$staff['assign_use_pri_role'] = "on";
 						$staff['isvisible'] = 1;
-						Staff::create($staff, $errors);
-						if (($user = StaffSession::lookup($username)) && $user->getId()) {
-							if (!$user instanceof StaffSession) {
-								$user = new StaffSession($user->getId());
-							}
-							return $user;
+						$staff['prems'] = array("visibility.agents", "visibility.departments");
+						
+						$staffcreate = Staff::create();
+						if ($staffcreate->update($staff,$errors)) {
+							$ost->logWarning('ldap StaffCreateed (' . $username . ')', json_encode($staff), false);
+							if (($user = StaffSession::lookup($username)) && $user->getId()) {
+								if (!$user instanceof StaffSession) {
+									$user = new StaffSession($user->getId());
+								}
+								return $user;
+							}							
+						} else {
+							$ost->logWarning('ldap Staff CreateError (' . $username . ')', json_encode($staff), false);
 						}
 					}
 				}
@@ -686,19 +715,6 @@ class LDAPMultiAuthentication {
 	function create_account($username, $type) {
 	}
 	
-	function convert_user($ldap, $username) {
-		$filter = '(mail={q})';
-		if ($user_info = $ldap->getUsers($this->$username, $this->adschema() , $filter))
-
-		$name = $user_info[0]['givenName'] . ' ' . $user_info[0]['sn'];
-
-		$user_info[0]['name'] = $name;
-
-		$auth_user = $this->keymap($user_info);
-
-		return $auth_user;
-	}
-
 	function lookup($lookup_dn) {
 		$lookup_user = array();
 		preg_match('/(dc=(?:[^C]|C(?!N=))*)(?:;|$)/i', $lookup_dn, $match);
@@ -792,6 +808,7 @@ class LDAPMultiAuthentication {
 			if ($ldap->connect()) {
 				$filter = self::getConfig()->get('search_base');
 				if ($userlist = $ldap->getUsers($query, $this->adschema() , $filter)) {
+					$ost->logWarning('ldap list(' . $query . ')', json_encode($userlist), false);
 					$temp_userlist = $this->keymap($userlist);
 					$combined_userlist = array_merge($combined_userlist, self::flatarray($temp_userlist));
 				} else {
