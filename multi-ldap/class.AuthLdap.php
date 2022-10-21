@@ -1,6 +1,6 @@
 <?php
 /**
- * class.AuthLdap.php , version 1.4
+ * class.AuthLdap.php , version 1.2
  * Joseph Philbert, October 2015
  * Provides LDAP authentication and user functions.
  *
@@ -24,14 +24,8 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  *
- * ChangeLog2
+ * ChangeLog
  * ---------
-  * version 1.4, 10.03.2022, Joseph Philbert <joe@philbertphotos.com> 
- * Added utility functions and fixed buggy functions 
- * 
-  * version 1.3, 01.03.2020, Joseph Philbert <joe@philbertphotos.com> 
- * Cleaned up code
- *
  * version 1.1, 08.03.2016, Joseph Philbert <joe@philbertphotos.com> 
  * Added ObjectSid and ObjectGUID functions
  * Uploaded to Github
@@ -355,7 +349,10 @@ class AuthLdap {
      */
     function checkGroup ( $uname,$group) {
         // builds the appropriate dn, based on whether $this->people and/or $this->group is set
-        $checkDn = $this->setDn(false);
+        $checkDn = $this->setDn(true);
+
+		if (!$this->authBind($this->searchUser, $this->searchPassword)) 
+			return false;
 
         // We need to search for the group in order to get it's entry.
 		$this->result = ldap_search($this->connection, $checkDn, "(&(sAMAccountName=$uname))", array('memberOf' ));
@@ -374,6 +371,33 @@ class AuthLdap {
         }
     }
 
+    /* Groups the user is a member of
+    * 
+    * @param string $username The username to query
+    * @param bool $recursive Recursive list of groups
+    * @param bool $isGUID Is the username passed a GUID or a samAccountName
+    * @return array
+    */
+    public function groups($username, $recursive = NULL, $isGUID = false)
+    {
+        if ($username === NULL) { return false; }
+        if ($recursive === NULL) { $recursive = $this->adldap->getRecursiveGroups(); } // Use the default option if they haven't set it
+        if (!$this->adldap->getLdapBind()) { return false; }
+        
+        // Search the directory for their information
+        $info = @$this->info($username, array("memberof", "primarygroupid"), $isGUID);
+        $groups = $this->adldap->utilities()->niceNames($info[0]["memberof"]); // Presuming the entry returned is our guy (unique usernames)
+
+        if ($recursive === true){
+            foreach ($groups as $id => $groupName){
+                $extraGroups = $this->adldap->group()->recursiveGroups($groupName);
+                $groups = array_merge($groups, $extraGroups);
+            }
+        }
+        //Remove duplicate groups
+        return array_unique ($groups);
+    }
+	
     // 2.4 Attribute methods -----------------------------------------------------
     /**
      * 2.4.1 : Returns an array containing a set of attribute values.
@@ -483,13 +507,13 @@ class AuthLdap {
                 } else if (strtolower($attributeArray[$j]) == "objectsid") {
 					$userslist["$i"]["$attributeArray[$j]"]      = $this->SIDtoString($info[$i][strtolower($attributeArray[$j])][0]);              
 				} else if (strtolower($attributeArray[$j]) == "objectguid") {
-					$userslist["$i"]["$attributeArray[$j]"]      = $this->GUIDtoString($info[$i][strtolower($attributeArray[$j])][0]);                               
+					$userslist["$i"]["$attributeArray[$j]"] = bin2hex($info[$i][strtolower($attributeArray[$j])][0]);                               
 				} else {
 					//Check if value is array
 					if (is_array($info[$i][strtolower($attributeArray[$j])])){
-					$userslist["$i"]["$attributeArray[$j]"]      = $info[$i][strtolower($attributeArray[$j])];
+					$userslist["$i"]["$attributeArray[$j]"] = $info[$i][strtolower($attributeArray[$j])];
 					} else {
-						$userslist["$i"]["$attributeArray[$j]"]      = $info[$i][strtolower($attributeArray[$j])][0];
+						$userslist["$i"]["$attributeArray[$j]"] = $info[$i][strtolower($attributeArray[$j])][0];
 					}
                 }
             }
