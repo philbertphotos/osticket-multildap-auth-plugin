@@ -5,7 +5,7 @@ require_once ('class.AuthLdap.php');
 require_once ('class.Mail.php');
 
 define('ospath', str_replace('scp/plugins.php', '', $_SERVER['PHP_SELF']));
-define('MULTI_PLUGIN_VERSION', '1.4');
+define('MULTI_PLUGIN_VERSION', '1.7');
 
 //FOLDERS
 define('MULTI_PLUGIN_ROOT', __DIR__ . '/');
