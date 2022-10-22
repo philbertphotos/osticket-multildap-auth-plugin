@@ -1,5 +1,6 @@
 <?php
 require_once (INCLUDE_DIR . 'class.auth.php');
+require_once (INCLUDE_DIR . 'class.user.php');
 require_once (INCLUDE_DIR . 'class.plugin.php'); //Plugin Local Libary
 require_once ('class.AuthLdap.php');
 require_once ('class.Mail.php');
@@ -689,23 +690,24 @@ class LDAPMultiAuthentication {
 					$ost->logWarning('ldap session (' . $username . ')',json_encode($client), false);
 				}
 				
-				if (!$client) {
-
+				//If client does not exsit lets create it manually.
+				if (!$acct) {
 					$info['name'] = $info['first'] . " " . $info['last'];
 					$info['email'] = $info['email'];
 					$info['full'] = $info['full'];
 					$info['first'] = $info['first'];
 					$info['last'] = $info['last'];
 					$info['username'] = $info['username'];
-					$info['dn'] = $info['dn'];
+					$info['backend'] = 'ldap.client';
+					$info['sendemail'] = false;
 
-					$client = new ClientCreateRequest($this, $username, $info);
-					//LdapMultiAuthPlugin::logger(LOG_INFO, 'ldap client (' . $username . ')', json_encode($info));
-					$ost->logWarning('ldap client (' . $username . ')',json_encode($info), false);
-					//if (!$cfg || !$cfg->isClientRegistrationEnabled() && self::$config->get('multiauth-force-register')) {
-					// return $client->attemptAutoRegister();
-					//}
-					
+					if ($cfg->getClientRegistrationMode() == "closed" && $this->getConfig()->get('multiauth-force-register')){
+						$create = User::fromVars($info);
+						$register = UserAccount::register($create, $info, $errors);
+						$client = new ClientSession(new EndUser($register->getUser()));
+						
+						$ost->logWarning('ldap user-created (' . $username . ')', 'user did not exsit and has been created', false);
+					}
 				}
 				return $client;
 			}
@@ -718,7 +720,6 @@ class LDAPMultiAuthentication {
 	function lookup($lookup_dn) {
 		$lookup_user = array();
 		preg_match('/(dc=(?:[^C]|C(?!N=))*)(?:;|$)/i', $lookup_dn, $match);
-		//preg_match('/(dc=)(.*?),.*/i', $lookup_dn, $match);
 		LdapMultiAuthPlugin::logger(LOG_DEBUG, 'ldap-lookup (' . $lookup_dn . ')', $lookup_dn);
 		$base_dn = strtolower($match[0]);
 
@@ -808,7 +809,7 @@ class LDAPMultiAuthentication {
 			if ($ldap->connect()) {
 				$filter = self::getConfig()->get('search_base');
 				if ($userlist = $ldap->getUsers($query, $this->adschema() , $filter)) {
-					$ost->logWarning('ldap list(' . $query . ')', json_encode($userlist), false);
+					$ost->logDebug('ldap search(' . $query . ')', json_encode($userlist), false);
 					$temp_userlist = $this->keymap($userlist);
 					$combined_userlist = array_merge($combined_userlist, self::flatarray($temp_userlist));
 				} else {
@@ -827,7 +828,7 @@ class LDAPMultiAuthentication {
 	}
 }
 class StaffLDAPMultiAuthentication extends StaffAuthenticationBackend implements AuthDirectorySearch {
-	static $name = "LDAP Authentication";
+	static $name = "Multi LDAP Authentication";
 	static $id = "ldap";
 	function __construct($config) {
 		$this->_ldap = new LDAPMultiAuthentication($config);
@@ -876,7 +877,7 @@ class StaffLDAPMultiAuthentication extends StaffAuthenticationBackend implements
 	}
 }
 class ClientLDAPMultiAuthentication extends UserAuthenticationBackend {
-	static $name = "LDAP Authentication";
+	static $name = "Multi LDAP Authentication";
 	static $id = "ldap.client";
 	function __construct($config) {
 		$this->_ldap = new LDAPMultiAuthentication($config, 'client');
