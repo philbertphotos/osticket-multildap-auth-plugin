@@ -17,7 +17,7 @@ Features
  - Keeps track of updated users
  - Schedule is activated based on the cron job
  - manual sync button
- - Will create users and staff even if the system is private/closed mode.
+ - create users and staff even if the system is private/closed mode.
  
  User Lookup
  
