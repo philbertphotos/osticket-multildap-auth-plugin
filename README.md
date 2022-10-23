@@ -17,6 +17,7 @@ Features
  - Keeps track of updated users
  - Schedule is activated based on the cron job
  - manual sync button
+ - Will create users and staff even if the system is private/closed mode.
  
  User Lookup
  
@@ -49,7 +50,7 @@ In my environment we have a Parent and Child domain
 Parent 4000+ users
 Child 20,000+ users
 
-It syncs both the agents and users without issues with about 1000+ users registered automaticly.
+It syncs both the agents and users without issues with about 1000+ users registered automatically.
 
 Roadmap
 ==========
@@ -57,6 +58,7 @@ Bug fixes
 UTF8 support for languages.
 Ldap caching for large LDAP domains
 Planning on adding a TAB feature to make setting section easier to manage.
+Add users from AD to helpdesk automatically.
 
 ### From source
 
