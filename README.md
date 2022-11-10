@@ -18,6 +18,7 @@ Features
  - Schedule is activated based on the cron job
  - manual sync button
  - create users and staff even if the system is private/closed mode.
+ - Fixed issue with upgrading from 1.5+ to 1.7
  
  User Lookup
  
