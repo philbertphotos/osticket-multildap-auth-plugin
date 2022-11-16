@@ -70,7 +70,7 @@ class LdapMultiAuthPluginConfig extends PluginConfig {
     //List osticket accounts
     function FromMail() {
         $frommail = array();
-        $sql = 'SELECT email_id,email,name,smtp_active FROM ' . EMAIL_TABLE . ' email ORDER by name';
+        $sql = 'SELECT email_id,email,name FROM ' . EMAIL_TABLE . ' email ORDER by name';
         if (($res = db_query($sql)) && db_num_rows($res)) {
             while (list($id, $email, $name, $smtp) = db_fetch_row($res)) {
                 if ($name) $email = Format::htmlchars("$name <$email>");
