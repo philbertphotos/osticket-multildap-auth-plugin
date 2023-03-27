@@ -1,6 +1,7 @@
 <?php
 //Check to see if user request a manual sync
-if ($_REQUEST['sync']){
+if (!empty($_REQUEST['sync']) || !empty($_REQUEST['check'])){
+
 //Load Osticket environment
 file_exists('../main.inc.php') or die('System Error');
 if (!defined('DISABLE_SESSION'))
@@ -10,7 +11,6 @@ require_once('../main.inc.php');
 require_once(INCLUDE_DIR.'class.http.php');
 require_once(INCLUDE_DIR.'class.api.php');
 require_once (INCLUDE_DIR . 'plugins/'.$_REQUEST['plugin'].'/auth.php');
-ini_set('memory_limit','512M');
 }
 
 class SyncLDAPMultiClass extends LDAPMultiAuthentication {
@@ -19,10 +19,65 @@ class SyncLDAPMultiClass extends LDAPMultiAuthentication {
 	var $log_report;
 	var $sync_results;
 
-	public function __construct($id) {
+	public function __construct($id) {		
 		$this->config = self::getconfig($id);
+		$this->LP = new LDAPMultiAuthentication($this->config);
 	}
+	
+	//** Only used for AJAX
+	static function _connectcheck() {
+		
+        $conninfo = array();
+        $ldapinfo = array();
 
+		foreach (preg_split('/;/', $LP->config['basedn']) as $i => $dn) {
+			$dn = trim($dn);
+			$servers = $LP->config['servers'];
+			$serversa = preg_split('/\s+/', $servers);
+
+			$sd = $LP->config['shortdomain'];
+			$sda = preg_split('/;|,/', $sd);
+
+			$bind_dn = $LP->config['bind_dn'];
+			$bind_dna = preg_split('/;/', $bind_dn) [$i];
+
+			$bind_pw = $LP->config['bind_pw'];
+			$bind_pwa = preg_split('/;|,/', $bind_pw) [$i];
+
+			$ldapinfo[] = array(
+				'dn' => $dn,
+				'sd' => $sda[$i],
+				'servers' => trim($serversa[$i]) ,
+				'bind_dn' => trim($bind_dna) ,
+				'bind_pw' => trim($bind_pwa)
+			);
+		}	
+
+        foreach ($ldapinfo as $data) {
+            $ldap = new AuthLdap();
+            $ldap->serverType = 'ActiveDirectory';
+            $ldap->server = preg_split('/;|,/', $data['servers']);
+            $ldap->domain = $data['sd'];
+            $ldap->dn = $data['dn'];
+            $ldap->useSSL = $data['ssl'];
+
+            if ($ldap->connect()) {
+                $conninfo[] = array(
+                    'bool' => true,
+                    'msg' => $data['sd'] . ' Connected OK!'
+                );
+            }
+            else {
+                $conninfo[] = array(
+                    false,
+                    $data['sd'] . " error:" . $ldap->ldapErrorCode . ": " . $ldap->ldapErrorText
+                );
+            }
+        }
+
+		echo json_encode($conninfo);
+    }
+	
 	function user_list() {
 		$userlist = array();
 		$ldapinfo;
@@ -76,18 +131,15 @@ class SyncLDAPMultiClass extends LDAPMultiAuthentication {
 	}
 	
 	function sendAlertMsg($msg) {
-		$ostmail = Email::lookup(key(json_decode($this->config['sync_mailfrom'])));
-		$alert_mail = new pssm_Mail();
-		$alert_mail->setTo($this
-			->config['sync_mailto'])
-			->setSubject('MultiLdap Report')
-			->setParameters('-f admin')
-			->setFrom($ostmail->ht['email'], $ostmail->ht['name'])
-			->addGenericHeader('X-Priority', '1 (Highest)')
-			->addGenericHeader('Importance', 'High')
-			->addGenericHeader('X-Mailer', $_pssm_name . ' ' . $_pssm_version)->setMessage($msg, true);
-		$send = $alert_mail->send();
-		$alert_mail->reset();
+		global $ost;
+		try {
+			$sync_mail = Email::lookup(key(json_decode($this->config['sync_mailfrom'])));
+			error_log("to : ", json_encode($this->config['sync_mailto']));
+			$sync_mail->send($this->config['sync_mailto'], 'MultiLdap Report', $msg);
+		} catch (Exception $e) {
+			error_log("ERROR : " . $e->getMessage());
+			//$ost->logError('Mail alert posting issue!', $e->getMessage(), true);
+		}
 	}
 
 	function _userobject($values) {
@@ -133,14 +185,14 @@ class SyncLDAPMultiClass extends LDAPMultiAuthentication {
 	}
 
 	public function getconfig($id = '' , $_ = null) {
-		$this->configvalues;
+		$configvalues;
 		$sql = "SELECT `key`,`value` FROM " . TABLE_PREFIX . "config WHERE `namespace` = 'plugin." . $id . "';";
 		$result = db_query($sql);
 
 		while ($row = db_fetch_array($result)) {
-			$this->configvalues[$row['key']] = $row['value'];
+			$configvalues[$row['key']] = $row['value'];
 		}
-		return $this->configvalues;
+		return $configvalues;
 	}
 
 	//Sanitize Number and add the correct extention format.
@@ -167,7 +219,7 @@ class SyncLDAPMultiClass extends LDAPMultiAuthentication {
 		$sql = "UPDATE " . TABLE_PREFIX . "user_account SET username ='"
 				. $guiduser ."' WHERE user_id = '" . $id . "'";
 		$result = db_query($sql);
-			//LdapMultiAuthPlugin::logger('debug', 'syncname-result', $sql, true);
+			//_ldap->logger('debug', 'syncname-result', $sql, true);
 		return $result;
 	}
 	
@@ -312,7 +364,10 @@ class SyncLDAPMultiClass extends LDAPMultiAuthentication {
 		}
 	}
 
+//Check users and send alert
 	function check_users() {
+		global $ost;
+		ini_set('memory_limit', '512M');
 		$sync_time_start = microtime(true);
 		$list = $this->user_list();
 		$log_header = ("(" . count($list) . ") 	total ldap entries.<br>");
@@ -423,16 +478,17 @@ class SyncLDAPMultiClass extends LDAPMultiAuthentication {
 
 			//echo json_encode($emailusers).'<br>';
 			//Update Global Array;
-			$sync_array = db_query("SELECT " . TABLE_PREFIX . "user.id as user_id, " . TABLE_PREFIX . "user_email.id as email_id," . TABLE_PREFIX . "user.name, " . TABLE_PREFIX . "user_email.address as mail,  " . TABLE_PREFIX . "user_account.username ,  " . TABLE_PREFIX . "user_account.status , " . TABLE_PREFIX . "ldap_sync.guid, " . TABLE_PREFIX . "ldap_sync.updated
+			$sql = "SELECT " . TABLE_PREFIX . "user.id as user_id, " . TABLE_PREFIX . "user_email.id as email_id," . TABLE_PREFIX . "user.name, " . TABLE_PREFIX . "user_email.address as mail,  " . TABLE_PREFIX . "user_account.username ,  " . TABLE_PREFIX . "user_account.backend , " . TABLE_PREFIX . "user_account.status , " . TABLE_PREFIX . "ldap_sync.guid, " . TABLE_PREFIX . "ldap_sync.updated 
 									FROM " . TABLE_PREFIX . "user 
 									LEFT JOIN " . TABLE_PREFIX . "user_email on " . TABLE_PREFIX . "user.id=" . TABLE_PREFIX . "user_email.user_id
 									LEFT JOIN " . TABLE_PREFIX . "user_account on " . TABLE_PREFIX . "user.id = " . TABLE_PREFIX . "user_account.user_id
-									LEFT JOIN " . TABLE_PREFIX . "ldap_sync on " . TABLE_PREFIX . "user.id = " . TABLE_PREFIX . "ldap_sync.id;");
+									LEFT JOIN " . TABLE_PREFIX . "ldap_sync on " . TABLE_PREFIX . "user.id = " . TABLE_PREFIX . "ldap_sync.id WHERE ost_user_account.backend = 'ldap.client';";
+			$sync_array = db_query($sql);
 			$g;
+			
 			foreach (db_assoc_array($sync_array, MYSQLI_ASSOC) as $sync) {
 				$uid = $sync["user_id"];
-				unset($sync["user_id"]);
-								
+				unset($sync["user_id"]);		
 				//Update any username changes
 					if ($guiduser = $guid_users[$sync["guid"]]) {
 						if (!empty($sync['username']))
@@ -444,7 +500,9 @@ class SyncLDAPMultiClass extends LDAPMultiAuthentication {
 				}	
 				$this->sync_info[$uid] = $sync;
 			}
-
+			
+			//error_log("AY" . json_encode($this->sync_info));
+			//ost->logWarning('sybc (' . json_encode($this->sync_info) . ')', false);			
 			//Query only users that have no guid.
 			$qry_ostusers = db_query("SELECT " . TABLE_PREFIX . "user.id as user_id, 
 										" . TABLE_PREFIX . "user_email.id as email_id," . TABLE_PREFIX . "user.name, " . TABLE_PREFIX . "user_email.address as mail 
@@ -486,50 +544,65 @@ class SyncLDAPMultiClass extends LDAPMultiAuthentication {
 						values ('" . $guests['id'] . "',1, '$default_timezone', '" . $guid_users[$key]->samaccountname . "','ldap.client', '{\"browser_lang\":\"$default_lang\"}', '" . date('Y-m-d H:i:s') . "');");
 			}
 
-			// Update all users based on the ObjectID
+			//Update all users based on the ObjectID
 			$sql_ostguid = db_query("SELECT * FROM `" . TABLE_PREFIX . "ldap_sync` WHERE guid IS NOT NULL");
-			$updateusers = array();
-			foreach (db_assoc_array($sql_ostguid, MYSQLI_ASSOC) as $guid) {
-				$key = $guid['guid']; //Key value for sorting
-					
-				//Get UserID based on key
-				if (array_key_exists($key, $guid_users)) {
-					$guid_users[$key]->user_id = $guid['id'];
+
+			$updateusers;
+			$sql_guid = db_assoc_array($sql_ostguid, MYSQLI_ASSOC);
+	
+			foreach ($sql_guid as $guid) {
+				$guidkey = $guid['guid']; //objectguid for matching users.	
+				//Get UserID based on objectguid
+				if (!empty($guid_users["$guidkey"])){
+					$guid_users["$guidkey"]->user_id = $guid['id'];		
 					if ($_REQUEST['full'] || $this->config['sync_full']) {
-						$updateusers[] = $guid_users[$key];
+						$updateusers[] = $guid_users["$guidkey"];
 					}
-					elseif ($guid['updated'] !== $this->changetime($guid_users[$key]->whenchanged)) {
-						$updateusers[] = $guid_users[$key];
-					}
+					elseif ($guid['updated'] !== $this->changetime($guid_users["$guidkey"]->whenchanged)) {
+						$updateusers[] = $guid_users["$guidkey"];
+					}					
 				}
 			}
-			//$log_header .= ("Users not Synced: " . db_num_rows($qry_ostusers) . '<br>');
+
 			$log_header = ("(" . db_num_rows($qry_ostusers) . ') users not in ldap.<br>');
 			$log_header = ("(" . (!empty($g) ? $g : '0') . ') users renamed.<br>');
+			$log_header = ("(" . count($this->sync_info) . ') total users.<br>');			
 			$log_header = ("(" . count($updateusers) . ') users synced.<br>');
 			$this->sync_results['updatedusers'] = count($updateusers);
+			$this->sync_results['totalusers'] = count($this->sync_info);
+			
+			//update all user attributes.
 			$this->update_users($updateusers);
 		}
-
+		//error_log("users : ", print_r($updateusers));
+		$LP->logger('debug', 'execution_time', $updateusers, false);
 		//execution time of the script
 		$execution_time = $this->formatmilliseconds(number_format(microtime(true) - $sync_time_start, 3) * 1000);
 		$log_footer = '    </tbody>
                                     </table>
 									<b>Total Execution Time:</b> ' . $execution_time . ' secs</br>';
 		//$log_debug = "</br><h2>Debug Info</h2> <hr></br>" . json_encode($this->log_report['debug']);
+		//$this->_ldap->logger('debug', 'execution_time', $execution_time, true);
 		
 		$this->sync_results['executetime'] = $execution_time;
 		$msg = $log_header . $log_table . $this->log_report['agent'] . $this->log_report['body'] . $log_footer . $log_debug;
 
 		if ($this->sync_results['updatedusers'] >= 1 && $this->config['sync_reports'])
 			$this->sendAlertMsg($msg);
+
 		return $this->sync_results;
 	}
 }
 
 if ($_REQUEST['sync']){
+	//$sync = new SyncLDAPMultiClass(explode('plugin.', $_REQUEST['data'])[1]);
+	//$results = $sync->check_users();
+	//return json_encode(array("info" => "done", "result" => $results));
+	}
+if ($_REQUEST['check']){
 	$sync = new SyncLDAPMultiClass(explode('plugin.', $_REQUEST['data'])[1]);
-	$results = $sync->check_users();
+	$results = $sync->_connectcheck();
 	return json_encode(array("info" => "done", "result" => $results));
 	}
+
 ?>
