@@ -48,7 +48,7 @@ class LdapMultiAuthPlugin extends Plugin {
 			$this->instance->backend = ".p".$this->id."i".$ins;
 			$this->instance->staff = ".p".$this->id."i".$ins;
 		} else {
-			$this->instances->plugin = "plugin.".$this->id;
+			$this->instance->plugin = "plugin.".$this->id;
 		}
 	}
 	
