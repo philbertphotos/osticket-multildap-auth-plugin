@@ -1,64 +1,67 @@
-<?php
-require_once (INCLUDE_DIR . 'class.auth.php');
-require_once (INCLUDE_DIR . 'class.user.php');
-require_once (INCLUDE_DIR . 'class.plugin.php'); //Plugin Local Libary
+<?php 
+ //load various classes
+foreach ([
+	'plugin','email', 'csrf', 'signal'
+] as $c) {
+	require_once INCLUDE_DIR . "class.$c.php";
+}
+	
 require_once ('class.AuthLdap.php');
-require_once ('class.Mail.php');
-
-define('ospath', str_replace('scp/plugins.php', '', $_SERVER['PHP_SELF']));
-define('MULTI_PLUGIN_VERSION', '1.7');
 
 //FOLDERS
 define('MULTI_PLUGIN_ROOT', __DIR__ . '/');
 
 require_once ('config.php');
 
+
 class LdapMultiAuthPlugin extends Plugin {
 	var $config_class = 'LdapMultiAuthPluginConfig';
 	var $crontime;
-
+		
 	function bootstrap() {
+		$this->plugininstance();
 		if ($this->firstRun()) {
 			if (!$this->configureFirstRun()) {
 				return false;
 			}
 		}
-		else if ($this->needUpgrade()) {
-			$this->configureUpgrade();
-		}
+		else if ($this->needUpgrade()) {}
 
 		$this->loadSync();
 		$config = $this->getConfig();
+		$id = $this->id;
 		Signal::connect('cron', array(
 			$this,
 			'onCronProcessed'
 		));
+			
 		if ($config->get('multiauth-staff')) StaffAuthenticationBackend::register(new StaffLDAPMultiAuthentication($config));
 		if ($config->get('multiauth-client')) UserAuthenticationBackend::register(new ClientLDAPMultiAuthentication($config));
 	}
-
-	function loadSync() {
-		$sql = 'SELECT * FROM `' . PLUGIN_TABLE . '` WHERE `isactive`=1 AND `id`=' . db_input($this->getId());
-		if (db_num_rows(db_query($sql))) {
-			if (!file_exists(ROOT_DIR.'/scp/sync_mldap.php') || (filemtime(MULTI_PLUGIN_ROOT.'/sync_mldap.php') != @filemtime(ROOT_DIR.'/scp/sync_mldap.php')))
-				$this->sync_copy();
-			
-			include_once (ROOT_DIR.'/scp/sync_mldap.php');
+	
+	//Checks if osticket supports instances
+	function plugininstance() {
+		$this->instance = new stdClass();
+		if (method_exists($this,'getInstances')) {
+			$ins = $this->getInstances($this->id)->key['plugin_id'];
+			$this->instance->plugin = ".plugin.".$this->id.".instance.".$ins;
+			$this->instance->backend = ".p".$this->id."i".$ins;
+			$this->instance->staff = ".p".$this->id."i".$ins;
+		} else {
+			$this->instances->plugin = "plugin.".$this->id;
 		}
 	}
- 
- function getPluginInstance($id) {
-    return $this->getPlugin()->getInstance($id);
-  }
-
-  static function getInstanceStatic() {
-    if (self::$instance == null) {
-      self::$instance = new AttachmentPreviewPlugin(1);
-    }
-    return self::$instance;
-  }
- 
-
+	
+	function loadSync() {
+		$sql = "SELECT * FROM " . PLUGIN_TABLE . " WHERE `isactive`=1 AND `id`='" . $this->id . "'";
+		if (db_num_rows(db_query($sql))) {
+			if (!file_exists(ROOT_DIR.'scp/sync_mldap.php') || (filemtime(MULTI_PLUGIN_ROOT.'sync_mldap.php') != @filemtime(ROOT_DIR.'scp/sync_mldap.php'))){
+				$this->sync_copy();
+			}
+			include_once (ROOT_DIR.'scp/sync_mldap.php');
+		}
+	}
+	
 	function millisecsBetween($dateOne, $dateTwo, $abs = true) {
 		$func = $abs ? 'abs' : 'intval';
 		return $func(strtotime($dateOne) - strtotime($dateTwo)) * 1000;
@@ -69,13 +72,17 @@ class LdapMultiAuthPlugin extends Plugin {
 		$date->setTimezone(new DateTimeZone($timezone));
 		return $date->format($format);
 	}
-
+		
 	function onCronProcessed() {
-		$this->time_zone = db_result(db_query("SELECT value FROM `" . TABLE_PREFIX . "config` WHERE `key` = 'default_timezone'"));
-
-		$sync_info = db_fetch_row(db_query('SELECT value FROM ' . TABLE_PREFIX . 'config 
-		WHERE namespace = "plugin.' . $this->id . '" AND `key` = "sync_data";')) [0];
-
+		global $ost;
+		$this->time_zone = db_result(db_query("SELECT value FROM `" . TABLE_PREFIX . "config` WHERE `key` = 'default_timezone'"));		
+		
+		
+		$sync_info = db_fetch_row(db_query('SELECT value FROM ' . TABLE_PREFIX . 'config WHERE namespace = "' . $this->instance->plugin . '" AND `key` = "sync_data";')) [0];
+		
+		//error_log("onCronProcessed :".json_encode($sync_info), 0);
+		//$ost->logWarning('sync_info', json_encode($sync_info), false);			
+		
 		$jsondata = json_decode($sync_info);
 		$schedule = $this->DateFromTimezone(strftime("%Y-%m-%d %H:%M:%S", $jsondata->schedule) , 'UTC', $this->time_zone, 'F j, Y, H:i');
 		$lastrun = $this->DateFromTimezone(strftime("%Y-%m-%d %H:%M:%S", $jsondata->lastrun) , 'UTC', $this->time_zone, 'F j, Y, H:i');
@@ -83,12 +90,17 @@ class LdapMultiAuthPlugin extends Plugin {
 		$date = new DateTime('now', new DateTimeZone($this->time_zone));
 
 		$this->crontime = $this->millisecsBetween($schedule, $lastrun, false) / 1000 / 60;
-		//$this->logger('warning', 'entry', json_encode($entry));
+		//$ost->logWarning('entry', json_encode($entry), false);
 
 		$this->sync_cron($this->crontime);
-			include_once (ROOT_DIR.'/scp/sync_mldap.php');
-			$sync = new SyncLDAPMultiClass($this->id);
-			//$this->logger('warning', 'Sync Config', $sync->config);
+		$this->loadSync();
+			//include_once (ROOT_DIR.'scp/sync_mldap.php');
+			
+			//Load Sync info
+			$sync = new SyncLDAPMultiClass($this->instance);
+			//$ost->logWarning('sync_config', json_encode($sync), false);	
+			//S($sync->config);		
+			//error_log print_r($sync->config);		
 
 		if ($this->allowAction()) {
 			if ($this->getConfig()->get('sync-users') || $this->getConfig()->get('sync-agents')) {
@@ -98,7 +110,7 @@ class LdapMultiAuthPlugin extends Plugin {
 				$results = $sync->check_users();
 				//$this->logger('warning', 'results', json_encode($results));
 				if (empty($results)) {
-					$this->logger('warning', 'LDAP Sync', 'Sync executed on (' . ($excu) . ') next execution in (' . $nextexcu . ')');
+					//$this->logger('warning', 'LDAP Sync', 'Sync executed on (' . ($excu) . ') next execution in (' . $nextexcu . ')');
 				}
 				else {
 					$this->logger('warning', 'LDAP Sync', '<div>Sync executed on (' . ($excu) . ')</div> <div>Next execution in (' . $nextexcu . ')</div>' . "<div>Total ldapusers: (" . $results['totalldap'] . ")</div> <div>Total agents: (" . $results['totalagents'] . ") </div>Total Updated Users: (" . $results['updatedusers'] . ") <div>Execute Time: (" . $results['executetime'] . ")</div>");
@@ -109,23 +121,32 @@ class LdapMultiAuthPlugin extends Plugin {
 
 	//Sync cron Logic
 	function sync_cron($minDelay = false) {
+		//outputs both keys in array
 		$sync_info = db_assoc_array(db_query('SELECT * FROM ' . TABLE_PREFIX . 'config 
-		WHERE namespace = "plugin.' . $this->id . '" AND `key` = "sync_schedule" OR `key` = "sync_data";') , MYSQLI_ASSOC);
+		WHERE namespace = "' . $this->instance->plugin . '" AND `key` = "sync_schedule" OR `key` = "sync_data";') , MYSQLI_ASSOC);
+		$this->minDelay = NULL;
 		if ($minDelay) $this->minDelay = $minDelay;
 
 		$output;
 		foreach ($sync_info as $info) {
 			if ($info['key'] == 'sync_schedule') {
-				//$output['schedulestr'] = $info['value']; //strtotime($info['value'] . " " . $this->time_zone);
+				$output['schedule'] = $info['value'];
 				$output['format'] = "+".$info['value'];
-				$output['scheduleupdate'] = $info['updated'];
 			}
 
-			if ($info['key'] == 'sync_data') $output['lastrun'] = $this->DateFromTimezone(strftime("%Y-%m-%d %H:%M", json_decode($info['value'])->lastrun) , 'UTC', $this->time_zone, 'Y-m-d H:i');
-			$output['schedule'] = json_decode($info['value'])->schedule;
-			$output['updated'] = $info['updated'];
+			if ($info['key'] == 'sync_data') {
+				$val = json_decode($info['value']);
+				$output['lastrun'] = $this->DateFromTimezone(strftime("%Y-%m-%d %H:%M", $val->lastrun) , 'UTC', $this->time_zone, 'Y-m-d H:i');
+				$output['schedule'] = $val->schedule;
+				$output['updated'] = $info['updated'];
+			}
 		}
-
+/*{
+	"schedule": 1667492102,
+	"format": "+1 minutes",
+	"updated": "2022-11-03 12:55:02",
+	"lastrun": "2022-11-03 11:34"
+}*/
 		$this->cront = $output;
 
 		$this->lastExec = 0; // it will contain the UNIXTIME of the last action
@@ -168,7 +189,7 @@ class LdapMultiAuthPlugin extends Plugin {
 	//last modification time.
 	function getEventUpdatedTime() {
 		$updated = db_fetch_row(db_query('SELECT UNIX_TIMESTAMP(updated) as updated FROM ' . TABLE_PREFIX . 'config 
-					WHERE namespace = "plugin.' . $this->id . '" AND `key` = "sync_data";')) [0];
+					WHERE namespace = "' . $this->instance->plugin . '" AND `key` = "sync_data";')) [0];
 		if (isset($updated)) {
 			$FT = $updated;
 		}
@@ -180,7 +201,7 @@ class LdapMultiAuthPlugin extends Plugin {
 
 	function sync_data($key, $val) {
 		$json_str = db_fetch_row(db_query('SELECT value FROM ' . TABLE_PREFIX . 'config 
-					WHERE namespace = "plugin.' . $this->id . '" AND `key` = "sync_data";')) [0];
+					WHERE namespace = "' . $this->instance->plugin . '" AND `key` = "sync_data";')) [0];
 		$data = @json_decode($json_str, true);
 		if (!is_object($data)) return json_encode(array(
 			'schedule' => strtotime($this->cront['format']) ,
@@ -191,20 +212,132 @@ class LdapMultiAuthPlugin extends Plugin {
 	}
 
 	function updateLastrun($tme) {
+		global $ost;
 		$data = $this->sync_data('lastrun', $tme);
 		$sql = 'UPDATE `' . TABLE_PREFIX . 'config` SET `value` =  \'' . ($data) . '\' , updated = CURRENT_TIMESTAMP
-                WHERE `key` = "sync_data" AND `namespace` = "plugin.' . $this->id . '";';
+                WHERE `key` = "sync_data" AND `namespace` = "' . $this->instance->plugin . '";';
+				//$ost->logWarning('updateLastrun', ($sql), false);
 		return db_query($sql);
 	}
 
 	function updateSchedule() {
 		$data = $this->sync_data('schedule', $this->cront['schedule']);
 		$sql = 'UPDATE `' . TABLE_PREFIX . 'config` SET `value` = \'' . ($data) . '\', updated = CURRENT_TIMESTAMP
-                        WHERE `key` = "sync_data" AND `namespace` = "plugin.' . $this->id . '";';
+                        WHERE `key` = "sync_data" AND `namespace` = "' . $this->instance->plugin . '";';
 		$result = db_query($sql);
 		return $result;
 	}
+ 
+ 	/**
+	 * Checks if this is the first run of our plugin.
+	 *
+	 * @return boolean
+	 */
+	function firstRun() {
+		//echo json_encode($this->getInstance(1), JSON_PARTIAL_OUTPUT_ON_ERROR);
+		//Look for plugin sync table
+		//$this->logger('warning', 'firstRun', '');
+		$sql = "SHOW TABLES LIKE '". TABLE_PREFIX ."ldap_sync'";
+		$res = db_query($sql);
+		$rows = db_num_rows($res);
 
+		if ($rows <= 0) {
+			$this->sync_copy();			
+			$this->createSyncTables();
+		}
+		return (db_num_rows($res) == 0);
+	} 
+	
+	/**
+	 * Checks to see if plug-in application needs to be upgraded
+	 * @return boolean
+	 */
+	function needUpgrade() {
+		$checkclicent = "SELECT id, user_id FROM " . TABLE_PREFIX ."user_account as ua WHERE `backend` LIKE CONCAT('ldap.client', '%') AND ua.user_id IN (SELECT  id FROM  " . TABLE_PREFIX ."ldap_sync WHERE ua.user_id = id)";	
+		
+		if (db_num_rows(db_query($checkclicent))){
+			$this->startUpgrade();
+		}
+					
+		if (!($res = db_query("SELECT version FROM " . PLUGIN_TABLE . " WHERE `id` = '" . $this->id . "';"))) {
+			return true;
+		}
+		else {
+			$ht = db_fetch_array($res);
+			if (floatval($ht['version']) < floatval($this->info['version'])) {
+				//Lets up date the version of the plug-in in old version of OSticket.
+				$versql = "UPDATE `" . TABLE_PREFIX . "plugin` SET `version` = '" . $this->info['version'] . "' , name = '" . $this->info['name'] . "', installed = CURRENT_TIMESTAMP
+                WHERE `id` = '" . $this->id . "';";
+			if (db_num_rows(db_query($versql))) {
+				$this->logger('warning', 'Update MLA_Version ', 'Version updated to: ' .$this->info['version']);
+				return true;
+			}
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * Start upgrade of needed tasks for plug-in application
+	 * @return boolean
+	 */
+	function startUpgrade() {
+		$clientsql = "UPDATE " . TABLE_PREFIX ."user_account as ua SET `backend` = 'mldap.client".$this->instance->backend."' WHERE `backend` LIKE CONCAT('ldap.client', '%') 
+					AND ua.user_id IN (SELECT Id FROM " . TABLE_PREFIX ."ldap_sync WHERE ua.user_id = id)";
+					
+		$staffsql = "UPDATE `" . TABLE_PREFIX ."staff as staff SET `backend` = 'mldap".$this->instance->backend."' WHERE `backend` LIKE CONCAT('ldap', '%') AND `Id` IN 
+					(SELECT Id FROM " . TABLE_PREFIX ."ldap_sync WHERE Id = ua.Id);";
+					
+			//Update User table for new plug-in instance information.
+			if (db_query($clientsql))
+				$this->logger('warning', 'MLA_User backend updated', 'Rows affected: ' . db_affected_rows());
+			if (db_query($staffsql))
+				$this->logger('warning', 'MLA_Staff backend updated', 'Rows affected: ' . db_affected_rows());
+	}
+
+	/**
+	 * Necessary functionality to configure first run of plug-in application
+	 */
+	function configureFirstRun() {		
+		$this->logger('warning', 'MLA_FirstRun', 'config');
+		return $this->sync_copy();
+	}
+
+	/**
+	 * Kicks off database installation scripts
+	 *
+	 * @return boolean
+	 */
+	function createSyncTables() {
+		db_query("DROP TABLE IF EXISTS " . TABLE_PREFIX . "ldap_sync");
+		$sqlsync = ("CREATE TABLE " . TABLE_PREFIX . "ldap_sync (
+				  `id` bigint(20) unsigned NOT NULL,
+				  `guid` varchar(40) NOT NULL,
+				  `updated` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+				  PRIMARY KEY (`id`)
+				) ENGINE=InnoDB DEFAULT CHARSET=utf8;");
+		$result = db_query($sqlsync);
+		if ($result) {
+			$this->logger('warning', 'MLA-createSyncTables', $sqlsync);
+			return true;
+		}
+		return false;
+	}
+
+	/**
+	 * Uninstall hook.
+	 *
+	 * @param type $errors
+	 * @return boolean
+	 */
+	function pre_uninstall(&$errors) {
+		$this->logger('warning', 'MLA-uninstall', $errors);
+		db_query("DROP TABLE IF EXISTS " . TABLE_PREFIX . "ldap_sync");
+		$result = unlink(ROOT_DIR.'scp/sync_mldap.php');
+		//if (!$result) return true;
+		return true;
+	}
+	
 	/**
 	 * Write information to system LOG
 	 *
@@ -251,108 +384,23 @@ class LdapMultiAuthPlugin extends Plugin {
 		}
 	}
 
-	/**
-	 * Checks if this is the first run of our plugin.
-	 *
-	 * @return boolean
-	 */
-	function firstRun() {
-		//$sql = 'SELECT version FROM ' . PLUGIN_TABLE . ' WHERE `name` LIKE \'%Multi LDAP%\'';
-		$sql = "SHOW TABLES LIKE '". TABLE_PREFIX ."ldap_sync'";
-		$res = db_query($sql);
-		$rows = db_num_rows($res);
-
-		if ($rows <= 0) {
-			$this->sync_copy();			
-			$this->createSyncTables();
-		}
-		return (db_num_rows($res) == 0);
-	}
-
 	function sync_copy() {
-		$file = MULTI_PLUGIN_ROOT.'/sync_mldap.php';
-		$newfile = ROOT_DIR.'/scp/sync_mldap.php';
+		global $ost;
+		$file = MULTI_PLUGIN_ROOT.'sync_mldap.php';
+		$newfile = ROOT_DIR.'scp/sync_mldap.php';
 		if (!file_exists($newfile)){
 			if (filemtime($file) != @filemtime($newfile))
 				unlink($newfile);
 			if(!copy($file,$newfile)){
-				$this->logger('error', 'MLA-Copy (failed)', "Coping file '" . $file . "' to SCP failed");
+				$this->logger('error', 'MLA-Copy (failed)', "Copying file '" . $file . "' to SCP failed");
+				//$ost->logError("MLA-Copy (failed)", "Copying file '" . $file . "' to SCP failed", false);
 				return false;
 			}else{
-				$this->logger('info', 'MLA-Copy (success)', "Coping file '" . $file . "' to SCP successful");
+				$this->logger('info', 'MLA-Copy (success)', "Copying file '" . $file . "' to SCP successful");
+				//$ost->logError("MLA-Copy (success)", "Copying file '" . $file . "' to SCP successful", false);
 				return true;
 			}
 		}
-	}
-
-	function updateVersion() {
-		$sql = "UPDATE version ' . PLUGIN_TABLE . ' SET version='".MULTI_PLUGIN_VERSION."' WHERE `name` LIKE '%Multi LDAP%'";
-		if (!($res = db_query($sql))) {
-			return true;
-		}
-
-		return false;
-	}
-	
-	function needUpgrade() {
-		$sql = 'SELECT version FROM ' . PLUGIN_TABLE . ' WHERE `name` LIKE \'%Multi LDAP%\'';
-		if (!($res = db_query($sql))) {
-			return true;
-		}
-		else {
-			$ht = db_fetch_array($res);
-			if (floatval($ht['version']) < floatval(MULTI_PLUGIN_VERSION)) {
-				return true;
-			}
-		}
-		return false;
-	}
-
-	function configureUpgrade() {
-
-	}
-
-	/**
-	 * Necessary functionality to configure first run of the application
-	 */
-	function configureFirstRun() {
-		//$this->logger('warning', 'configureFirstRun', 'config');
-			return $this->sync_copy();
-	}
-
-	/**
-	 * Kicks off database installation scripts
-	 *
-	 * @return boolean
-	 */
-	function createSyncTables() {
-		db_query("DROP TABLE IF EXISTS " . TABLE_PREFIX . "ldap_sync");
-		$sqlsync = ("CREATE TABLE " . TABLE_PREFIX . "ldap_sync (
-				  `id` bigint(20) unsigned NOT NULL,
-				  `guid` varchar(40) NOT NULL,
-				  `updated` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-				  PRIMARY KEY (`id`)
-				) ENGINE=InnoDB DEFAULT CHARSET=utf8;");
-		$this->logger('warning', 'MLA-createSyncTables', $sqlsync);
-		$result = db_query($sqlsync);
-		if ($result) {
-			return true;
-		}
-		return false;
-	}
-
-	/**
-	 * Uninstall hook.
-	 *
-	 * @param type $errors
-	 * @return boolean
-	 */
-	function pre_uninstall(&$errors) {
-		$this->logger('warning', 'MLA-uninstall', $errors);
-		db_query("DROP TABLE IF EXISTS " . TABLE_PREFIX . "ldap_sync");
-		$result = unlink(ROOT_DIR.'/scp/sync_mldap.php');
-		//if (!$result) return true;
-		return true;
 	}
 }
 
@@ -365,6 +413,13 @@ class LDAPMultiAuthentication {
 		$this->config = $config;
 		$this->type = $type;
 	}
+
+	static function DateFromTimezone($date, $gmt, $timezone, $format) {
+		$date = new DateTime($date, new DateTimeZone($gmt));
+		$date->setTimezone(new DateTimeZone($timezone));
+		return $date->format($format);
+	}
+	
 	function getConfig() {
 		return $this->config;
 	}
@@ -450,6 +505,57 @@ class LDAPMultiAuthentication {
 		return $ldap;
 	}
 
+static function _connectcheck() {
+        $conninfo = array();
+        $ldapinfo = array();
+
+		foreach (preg_split('/;/', $this->config['basedn']) as $i => $dn) {
+			$dn = trim($dn);
+			$servers = $this->config['servers'];
+			$serversa = preg_split('/\s+/', $servers);
+
+			$sd = $this->config['shortdomain'];
+			$sda = preg_split('/;|,/', $sd);
+
+			$bind_dn = $this->config['bind_dn'];
+			$bind_dna = preg_split('/;/', $bind_dn) [$i];
+
+			$bind_pw = $this->config['bind_pw'];
+			$bind_pwa = preg_split('/;|,/', $bind_pw) [$i];
+
+			$ldapinfo[] = array(
+				'dn' => $dn,
+				'sd' => $sda[$i],
+				'servers' => trim($serversa[$i]) ,
+				'bind_dn' => trim($bind_dna) ,
+				'bind_pw' => trim($bind_pwa)
+			);
+		}	
+
+        foreach ($ldapinfo as $data) {
+            $ldap = new AuthLdap();
+            $ldap->serverType = 'ActiveDirectory';
+            $ldap->server = preg_split('/;|,/', $data['servers']);
+            $ldap->domain = $data['sd'];
+            $ldap->dn = $data['dn'];
+            $ldap->useSSL = $data['ssl'];
+
+            if ($ldap->connect()) {
+                $conninfo[] = array(
+                    'bool' => true,
+                    'msg' => $data['sd'] . ' Connected OK!'
+                );
+            }
+            else {
+                $conninfo[] = array(
+                    false,
+                    $data['sd'] . " error:" . $ldap->ldapErrorCode . ": " . $ldap->ldapErrorText
+                );
+            }
+        }
+
+		echo json_encode($conninfo);
+    }
 	static function connectcheck($ldapinfo) {
 		$conninfo = array();
 		foreach ($ldapinfo as $data) {
@@ -518,8 +624,9 @@ class LDAPMultiAuthentication {
 
 	function authenticate($username, $password = null) {		
 		global $ost, $cfg;
+		
 		if (!$password) {
-			//$ost->logWarning('auth (' . $username . ')', false);
+			$ost->logWarning('auth (' . $username . ')', "", false);
 			return null;
 		}
 		//check if they used their email to login.
@@ -651,7 +758,7 @@ class LDAPMultiAuthentication {
 						$staff['isadmin'] = 0;
 						$staff['isactive'] = 1;
 						$staff['group_id'] = 1;
-						$staff['dept_id'] = 1;
+						$staff['dept_id'] = $this->getConfig()->get('multiauth_staff_dept');
 						$staff['role_id'] = 1;
 						$staff['backend'] = "ldap";
 						$staff['assign_use_pri_role'] = "on";
@@ -690,7 +797,7 @@ class LDAPMultiAuthentication {
 					$ost->logWarning('ldap session (' . $username . ')',json_encode($client), false);
 				}
 				
-				//If client does not exsit lets create it manually.
+				//If client does not exist lets create it manually.
 				if (!$acct) {
 					$info['name'] = $info['first'] . " " . $info['last'];
 					$info['email'] = $info['email'];
@@ -698,7 +805,7 @@ class LDAPMultiAuthentication {
 					$info['first'] = $info['first'];
 					$info['last'] = $info['last'];
 					$info['username'] = $info['username'];
-					$info['backend'] = 'ldap.client';
+					$info['backend'] = 'mldap.client';
 					$info['sendemail'] = false;
 
 					if ($cfg->getClientRegistrationMode() == "closed" && $this->getConfig()->get('multiauth-force-register')){
@@ -706,7 +813,7 @@ class LDAPMultiAuthentication {
 						$register = UserAccount::register($create, $info, $errors);
 						$client = new ClientSession(new EndUser($register->getUser()));
 						
-						$ost->logWarning('ldap user-created (' . $username . ')', 'user did not exsit and has been created', false);
+						$ost->logWarning('ldap user-created (' . $username . ')', 'user was ceeated', false);
 					}
 				}
 				return $client;
@@ -805,7 +912,7 @@ class LDAPMultiAuthentication {
 			$ldap->searchUser = $data['bind_dn'];
 			$ldap->searchPassword = $data['bind_pw'];
 
-			//$ost->logDebug('ldap query(' . $query . ')', $ldap->dn . json_encode($ldap));
+			$ost->logWarning('ldap query(' . $query . ')', $ldap->dn . json_encode($ldap));
 			if ($ldap->connect()) {
 				$filter = self::getConfig()->get('search_base');
 				if ($userlist = $ldap->getUsers($query, $this->adschema() , $filter)) {
@@ -829,7 +936,7 @@ class LDAPMultiAuthentication {
 }
 class StaffLDAPMultiAuthentication extends StaffAuthenticationBackend implements AuthDirectorySearch {
 	static $name = "Multi LDAP Authentication";
-	static $id = "ldap";
+	static $id = "mldap";
 	function __construct($config) {
 		$this->_ldap = new LDAPMultiAuthentication($config);
 		$this->config = $config;
@@ -856,7 +963,7 @@ class StaffLDAPMultiAuthentication extends StaffAuthenticationBackend implements
 			$list['backend'] = static ::$id;
 			$list['id'] = static ::$id . ':' . $list['dn'];
 		}
-		//$ost->logWarning('lookup-result', $list, false);
+		$ost->logWarning('lookup-result', $list, false);
 		return ($list);
 	}
 	//General searching of users
@@ -878,7 +985,7 @@ class StaffLDAPMultiAuthentication extends StaffAuthenticationBackend implements
 }
 class ClientLDAPMultiAuthentication extends UserAuthenticationBackend {
 	static $name = "Multi LDAP Authentication";
-	static $id = "ldap.client";
+	static $id = "mldap.client";
 	function __construct($config) {
 		$this->_ldap = new LDAPMultiAuthentication($config, 'client');
 		$this->config = $config;
