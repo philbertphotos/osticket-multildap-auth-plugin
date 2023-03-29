@@ -19,8 +19,9 @@ class SyncLDAPMultiClass extends LDAPMultiAuthentication {
 	var $log_report;
 	var $sync_results;
 
-	public function __construct($id) {		
-		$this->config = self::getconfig($id);
+	public function __construct($instance) {		
+		$this->config = self::mlconfig($instance);
+		$this->instance = $instance;
 		$this->LP = new LDAPMultiAuthentication($this->config);
 	}
 	
@@ -184,9 +185,9 @@ class SyncLDAPMultiClass extends LDAPMultiAuthentication {
 		return rtrim($time, '0');
 	}
 
-	public function getconfig($id = '' , $_ = null) {
+	public function mlconfig($instance) {
 		$configvalues;
-		$sql = "SELECT `key`,`value` FROM " . TABLE_PREFIX . "config WHERE `namespace` = 'plugin." . $id . "';";
+		$sql = "SELECT `key`,`value` FROM " . TABLE_PREFIX . "config WHERE `namespace` = '" . $instance->plugin . "';";
 		$result = db_query($sql);
 
 		while ($row = db_fetch_array($result)) {
@@ -219,7 +220,6 @@ class SyncLDAPMultiClass extends LDAPMultiAuthentication {
 		$sql = "UPDATE " . TABLE_PREFIX . "user_account SET username ='"
 				. $guiduser ."' WHERE user_id = '" . $id . "'";
 		$result = db_query($sql);
-			//_ldap->logger('debug', 'syncname-result', $sql, true);
 		return $result;
 	}
 	
@@ -476,13 +476,12 @@ class SyncLDAPMultiClass extends LDAPMultiAuthentication {
 			//Remove objectguid that is not in the ost_user table
 			db_query("DELETE FROM `" . TABLE_PREFIX . "ldap_sync` WHERE NOT EXISTS (SELECT * FROM `" . TABLE_PREFIX . "user` WHERE id = " . TABLE_PREFIX . "ldap_sync.id);");
 
-			//echo json_encode($emailusers).'<br>';
 			//Update Global Array;
 			$sql = "SELECT " . TABLE_PREFIX . "user.id as user_id, " . TABLE_PREFIX . "user_email.id as email_id," . TABLE_PREFIX . "user.name, " . TABLE_PREFIX . "user_email.address as mail,  " . TABLE_PREFIX . "user_account.username ,  " . TABLE_PREFIX . "user_account.backend , " . TABLE_PREFIX . "user_account.status , " . TABLE_PREFIX . "ldap_sync.guid, " . TABLE_PREFIX . "ldap_sync.updated 
 									FROM " . TABLE_PREFIX . "user 
 									LEFT JOIN " . TABLE_PREFIX . "user_email on " . TABLE_PREFIX . "user.id=" . TABLE_PREFIX . "user_email.user_id
 									LEFT JOIN " . TABLE_PREFIX . "user_account on " . TABLE_PREFIX . "user.id = " . TABLE_PREFIX . "user_account.user_id
-									LEFT JOIN " . TABLE_PREFIX . "ldap_sync on " . TABLE_PREFIX . "user.id = " . TABLE_PREFIX . "ldap_sync.id WHERE ost_user_account.backend = 'ldap.client';";
+									LEFT JOIN " . TABLE_PREFIX . "ldap_sync on " . TABLE_PREFIX . "user.id = " . TABLE_PREFIX . "ldap_sync.id WHERE " . TABLE_PREFIX . "user_account.backend = 'mldap.client". $this->instance->backend ."';";
 			$sync_array = db_query($sql);
 			$g;
 			
@@ -541,7 +540,7 @@ class SyncLDAPMultiClass extends LDAPMultiAuthentication {
 			foreach (db_assoc_array($qry_guests, MYSQLI_ASSOC) as $guests) {
 				$key = $guests['guid'];
 				db_query("INSERT INTO " . TABLE_PREFIX . "user_account(user_id, status, timezone, username, backend, extra, registered)
-						values ('" . $guests['id'] . "',1, '$default_timezone', '" . $guid_users[$key]->samaccountname . "','ldap.client', '{\"browser_lang\":\"$default_lang\"}', '" . date('Y-m-d H:i:s') . "');");
+						values ('" . $guests['id'] . "',1, '$default_timezone', '" . $guid_users[$key]->samaccountname . "','mldap.client". $this->instance->backend ."', '{\"browser_lang\":\"$default_lang\"}', '" . date('Y-m-d H:i:s') . "');");
 			}
 
 			//Update all users based on the ObjectID
@@ -574,15 +573,12 @@ class SyncLDAPMultiClass extends LDAPMultiAuthentication {
 			//update all user attributes.
 			$this->update_users($updateusers);
 		}
-		//error_log("users : ", print_r($updateusers));
-		$LP->logger('debug', 'execution_time', $updateusers, false);
+		//$LP->logger('debug', '', , false);
 		//execution time of the script
 		$execution_time = $this->formatmilliseconds(number_format(microtime(true) - $sync_time_start, 3) * 1000);
 		$log_footer = '    </tbody>
                                     </table>
 									<b>Total Execution Time:</b> ' . $execution_time . ' secs</br>';
-		//$log_debug = "</br><h2>Debug Info</h2> <hr></br>" . json_encode($this->log_report['debug']);
-		//$this->_ldap->logger('debug', 'execution_time', $execution_time, true);
 		
 		$this->sync_results['executetime'] = $execution_time;
 		$msg = $log_header . $log_table . $this->log_report['agent'] . $this->log_report['body'] . $log_footer . $log_debug;
