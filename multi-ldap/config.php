@@ -37,7 +37,8 @@ class LdapMultiAuthPluginConfig extends PluginConfig {
 		$time_zone = db_result(db_query("SELECT value FROM `" . TABLE_PREFIX . "config` WHERE `key` = 'default_timezone'"));
 		$scheduletime = LDAPMultiAuthentication::DateFromTimezone(strftime("%Y-%m-%d %H:%M", $sync_val->schedule) , 'UTC', $time_zone, 'F d Y g:i a');
 		//$ost->logWarning('getschedule', $sync_val . " - " . $scheduletime . " - " . $time_zone, false);	
-		return gmdate("F d Y g:i a", $sync_val->schedule);
+		//return gmdate("F d Y g:i a", $sync_val->schedule);
+		return $scheduletime;
 	}	
 	
 	function getlastschedule() {
@@ -374,7 +375,7 @@ class LdapMultiAuthPluginConfig extends PluginConfig {
 					'content' => __('
 		<script type="text/javascript">		
             $(function() {
-    		$("#sync-btn").click(function() {
+    		<!--$("#sync-btn").click(function() {
 				console.log("'."test".'");
 						$.ajax({ //Send the val to php file using Ajax in POST method
 							type: "POST",
@@ -394,10 +395,10 @@ class LdapMultiAuthPluginConfig extends PluginConfig {
 								console.log(json);
 							}
 						});
-					});
+					});-->
 				});
 			</script>
-			<div id="sync-btn" class="button">sync users <i class="icon-refresh"></i></div>')
+			<!--<div id="sync-btn" class="button">sync users <i class="icon-refresh"></i></div>-->')
 					//icon-spin
 					
 				)
