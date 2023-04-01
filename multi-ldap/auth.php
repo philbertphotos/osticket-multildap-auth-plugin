@@ -812,7 +812,7 @@ static function _connectcheck() {
 	function lookup($lookup_dn) {
 		$lookup_user = array();
 		preg_match('/(dc=(?:[^C]|C(?!N=))*)(?:;|$)/i', $lookup_dn, $match);
-		LdapMultiAuthPlugin::logger(LOG_DEBUG, 'ldap-lookup (' . $lookup_dn . ')', $lookup_dn);
+		//LdapMultiAuthPlugin::logger(LOG_DEBUG, 'ldap-lookup (' . $lookup_dn . ')', $lookup_dn);
 		$base_dn = strtolower($match[0]);
 
 		$key = array_search($base_dn, preg_split('/;/', strtolower($this->getConfig($this->instance->ins)
@@ -901,7 +901,7 @@ static function _connectcheck() {
 			if ($ldap->connect()) {
 				$filter = self::getConfig($this->instance->ins)->get('search_base');
 				if ($userlist = $ldap->getUsers($query, $this->adschema() , $filter)) {
-					$ost->logDebug('ldap search(' . $query . ')', json_encode($userlist), false);
+					//$ost->logDebug('ldap search(' . $query . ')', json_encode($userlist), false);
 					$temp_userlist = $this->keymap($userlist);
 					$combined_userlist = array_merge($combined_userlist, self::flatarray($temp_userlist));
 				} else {
@@ -915,7 +915,7 @@ static function _connectcheck() {
 				$ost->logWarning('search-info', $ldap->ldapErrorCode . " - " . $ldap->ldapErrorText, false);
 			}
 		}
-		$ost->logDebug('ldap-search (' . $query . ')', json_encode($combined_userlist), false);
+		//$ost->logDebug('ldap-search (' . $query . ')', json_encode($combined_userlist), false);
 		return $combined_userlist;
 	}
 }
@@ -964,7 +964,7 @@ class StaffLDAPMultiAuthentication extends StaffAuthenticationBackend implements
 			$l['backend'] = static ::$id;
 			$l['id'] = static ::$id . ':' . $l['dn'];
 		}
-		$ost->logDebug('search-result', $list , false);
+		//$ost->logDebug('search-result', $list , false);
 		return $list;
 	}
 }
