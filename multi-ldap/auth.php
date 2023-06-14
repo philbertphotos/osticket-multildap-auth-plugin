@@ -897,7 +897,7 @@ static function _connectcheck() {
 			$ldap->searchUser = $data['bind_dn'];
 			$ldap->searchPassword = $data['bind_pw'];
 
-			$ost->logWarning('ldap query(' . $query . ')', $ldap->dn . json_encode($ldap));
+			//$ost->logWarning('ldap query(' . $query . ')', $ldap->dn . json_encode($ldap));
 			if ($ldap->connect()) {
 				$filter = self::getConfig($this->instance->ins)->get('search_base');
 				if ($userlist = $ldap->getUsers($query, $this->adschema() , $filter)) {
@@ -905,7 +905,7 @@ static function _connectcheck() {
 					$temp_userlist = $this->keymap($userlist);
 					$combined_userlist = array_merge($combined_userlist, self::flatarray($temp_userlist));
 				} else {
-					$ost->logError('search-error (' .$query. ')', $ldap->ldapErrorCode . " - " . $ldap->ldapErrorText, false);
+					//$ost->logError('search-error (' .$query. ')', $ldap->ldapErrorCode . " - " . $ldap->ldapErrorText, false);
 				}
 			} else {
 				$conninfo[] = array(
