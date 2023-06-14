@@ -270,8 +270,8 @@ class LdapMultiAuthPlugin extends Plugin {
 		$clientsql = "UPDATE " . TABLE_PREFIX ."user_account as ua SET `backend` = 'mldap.client".$this->instance->backend."' WHERE `backend` LIKE CONCAT('ldap.client', '%') 
 					AND ua.user_id IN (SELECT Id FROM " . TABLE_PREFIX ."ldap_sync WHERE ua.user_id = id)";
 					
-		$staffsql = "UPDATE `" . TABLE_PREFIX ."staff as staff SET `backend` = 'mldap".$this->instance->backend."' WHERE `backend` LIKE CONCAT('ldap', '%') AND `Id` IN 
-					(SELECT Id FROM " . TABLE_PREFIX ."ldap_sync WHERE Id = staff.Id);";
+		$staffsql = "UPDATE `" . TABLE_PREFIX ."staff as st SET `backend` = 'mldap".$this->instance->backend."' WHERE `backend` LIKE CONCAT('ldap', '%') AND st.staff_Id IN 
+					(SELECT Id FROM " . TABLE_PREFIX ."ldap_sync WHERE Id = st.staff_Id);";
 					
 			//Update User table for new plug-in instance information.
 			if (db_query($clientsql))
