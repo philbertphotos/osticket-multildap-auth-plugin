@@ -56,8 +56,9 @@ class LdapMultiAuthPlugin extends Plugin {
 	function loadSync() {
 		$sql = "SELECT * FROM " . PLUGIN_TABLE . " WHERE `isactive`=1 AND `id`='" . $this->id . "'";
 		if (db_num_rows(db_query($sql))) {
-			if (!file_exists(ROOT_DIR.'scp/sync_mldap.php') || (filemtime(MULTI_PLUGIN_ROOT.'sync_mldap.php') != @filemtime(ROOT_DIR.'scp/sync_mldap.php'))){
+			if (!file_exists(ROOT_DIR.'scp/sync_mldap.php') || (md5_file(MULTI_PLUGIN_ROOT.'sync_mldap.php') != @md5_file(ROOT_DIR.'scp/sync_mldap.php'))){
 				$this->sync_copy();
+				//$this->logger('warning', 'Sync Copy', '');
 			}
 			include_once (ROOT_DIR.'scp/sync_mldap.php');
 		}
@@ -94,12 +95,14 @@ class LdapMultiAuthPlugin extends Plugin {
 			
 			//Load Sync info
 			$sync = new SyncLDAPMultiClass($this->instance);	
-
+		//$this->logger('warning', 'Check Sync', json_encode($this->allowAction()));
 		if ($this->allowAction()) {
 			if ($this->getConfig($this->instance->ins)->get('sync-users') || $this->getConfig($this->instance->ins)->get('sync-agents')) {
+				//$this->logger('warning', 'Check Sync1', json_encode($this->allowAction()));
 				$excu = $this->DateFromTimezone(strftime("%Y-%m-%d %H:%M", $this->lastExec) , 'UTC', $this->time_zone, 'F d Y g:i a');
 				$nextexcu = $this->DateFromTimezone(strftime("%Y-%m-%d %H:%M", $this->nextExec) , 'UTC', $this->time_zone, 'F d Y g:i a');
 				$results = $sync->check_users();
+				//$this->logger('warning', 'Check Results', json_encode($results));
 				if (empty($results)) {
 					$this->logger('warning', 'LDAP Sync', 'Sync executed on (' . ($excu) . ') next execution in (' . $nextexcu . ')');
 				}
@@ -270,8 +273,8 @@ class LdapMultiAuthPlugin extends Plugin {
 		$clientsql = "UPDATE " . TABLE_PREFIX ."user_account as ua SET `backend` = 'mldap.client".$this->instance->backend."' WHERE `backend` LIKE CONCAT('ldap.client', '%') 
 					AND ua.user_id IN (SELECT Id FROM " . TABLE_PREFIX ."ldap_sync WHERE ua.user_id = id)";
 					
-		$staffsql = "UPDATE `" . TABLE_PREFIX ."staff as st SET `backend` = 'mldap".$this->instance->backend."' WHERE `backend` LIKE CONCAT('ldap', '%') AND st.staff_Id IN 
-					(SELECT Id FROM " . TABLE_PREFIX ."ldap_sync WHERE Id = st.staff_Id);";
+		$staffsql = "UPDATE `" . TABLE_PREFIX ."staff as staff SET `backend` = 'mldap".$this->instance->backend."' WHERE `backend` LIKE CONCAT('ldap', '%') AND `Id` IN 
+					(SELECT Id FROM " . TABLE_PREFIX ."ldap_sync WHERE Id = ua.Id);";
 					
 			//Update User table for new plug-in instance information.
 			if (db_query($clientsql))
@@ -328,9 +331,7 @@ class LdapMultiAuthPlugin extends Plugin {
 	 *
 	 */
 	function logger($priority, $title, $message, $verbose = false) {
-		//if (!empty(self::getConfig($this->instance->ins)->get('debug-choice')) && self::getConfig($this->instance->ins)->get('debug-choice') && !$verbose 
-		//|| (self::getConfig($this->nstance->ins)->get('debug-verbose') && $verbose)) {
-				
+		if (self::getConfig($this->instance->ins)->get('debug-choice') && !$verbose || (self::getConfig($this->nstance->ins)->get('debug-verbose') && $verbose)) {
 			if (is_array($message) || is_object($message)) {
 				$message = json_encode($message);
 			}
@@ -366,26 +367,32 @@ class LdapMultiAuthPlugin extends Plugin {
 			//Save log based on system log level settings.
 			$sql = 'INSERT INTO ' . SYSLOG_TABLE . ' SET created=NOW(), updated=NOW() ' . ',title=' . db_input(Format::sanitize($title, true)) . ',log_type=' . db_input($loglevel[$level]) . ',log=' . db_input(Format::sanitize($message, false)) . ',ip_address=' . db_input($_SERVER['REMOTE_ADDR']);
 			db_query($sql, false);
-		//}
+		}
 	}
 
 	function sync_copy() {
 		global $ost;
-		$file = MULTI_PLUGIN_ROOT.'sync_mldap.php';
-		$newfile = ROOT_DIR.'scp/sync_mldap.php';
-		if (!file_exists($newfile)){
-			if (filemtime($file) != @filemtime($newfile))
-				unlink($newfile);
-			if(!copy($file,$newfile)){
-				$this->logger('error', 'MLA-Copy (failed)', "Copying file '" . $file . "' to SCP failed");
-				//$ost->logError("MLA-Copy (failed)", "Copying file '" . $file . "' to SCP failed", false);
+		$pgfile = MULTI_PLUGIN_ROOT.'sync_mldap.php';
+		$scpfile = ROOT_DIR.'scp/sync_mldap.php';
+		if (!file_exists($scpfile)){
+			if(!copy($pgfile,$scpfile)){
+				$this->logger('error', 'MLA-Copy (failed)', "Copying new file '" . $pgfile . "' to SCP folder failed");
 				return false;
-			}else{
-				$this->logger('info', 'MLA-Copy (success)', "Copying file '" . $file . "' to SCP successful");
-				//$ost->logError("MLA-Copy (success)", "Copying file '" . $file . "' to SCP successful", false);
+			} else {
+				$this->logger('info', 'MLA-Copy (success)', "Copying new file '" . $pgfile . "' to SCP folder successful");
 				return true;
 			}
-		}
+		} else if (md5_file($pgfile) != @md5_file($scpfile)){
+				unlink($scpfile);
+				if(!copy($pgfile,$scpfile)){
+					$this->logger('error', 'MLA-Updated (failed)', "Replacing file '" . $pgfile . "' to SCP folder failed");
+					return false;
+				} else {
+					$this->logger('info', 'MLA-Updated (success)', "Replacing file '" . $pgfile . "' to SCP folder successful");
+					return true;
+				}				
+			}
+			return false;
 	}
 }
 
@@ -901,7 +908,7 @@ static function _connectcheck() {
 			if ($ldap->connect()) {
 				$filter = self::getConfig($this->instance->ins)->get('search_base');
 				if ($userlist = $ldap->getUsers($query, $this->adschema() , $filter)) {
-					//$ost->logDebug('ldap search(' . $query . ')', json_encode($userlist), false);
+					$ost->logDebug('ldap search(' . $query . ')', json_encode($userlist), false);
 					$temp_userlist = $this->keymap($userlist);
 					$combined_userlist = array_merge($combined_userlist, self::flatarray($temp_userlist));
 				} else {
@@ -915,7 +922,7 @@ static function _connectcheck() {
 				$ost->logWarning('search-info', $ldap->ldapErrorCode . " - " . $ldap->ldapErrorText, false);
 			}
 		}
-		//$ost->logDebug('ldap-search (' . $query . ')', json_encode($combined_userlist), false);
+		$ost->logDebug('ldap-search (' . $query . ')', json_encode($combined_userlist), false);
 		return $combined_userlist;
 	}
 }
@@ -948,7 +955,7 @@ class StaffLDAPMultiAuthentication extends StaffAuthenticationBackend implements
 			$list['backend'] = static ::$id;
 			$list['id'] = static ::$id . ':' . $list['dn'];
 		}
-		$ost->logWarning('lookup-result', $list, false);
+		//$ost->logWarning('lookup-result', $list, false);
 		return ($list);
 	}
 	//General searching of users
@@ -977,7 +984,6 @@ class ClientLDAPMultiAuthentication extends UserAuthenticationBackend {
 		if ($domain = $config->get('basedn')) self::$name .= sprintf(' (%s)', $domain);
 	}
 	function getName() {
-		//LdapMultiAuthPlugin::logger('info', 'getName', $this->config);
 		$config = $this->config;
 		list($__, $_N) = $config::translate();
 		return $__(static ::$name);
