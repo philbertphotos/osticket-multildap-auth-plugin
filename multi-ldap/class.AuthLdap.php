@@ -1,6 +1,6 @@
 <?php
 /**
- * class.AuthLdap.php , version 1.2
+ * class.AuthLdap.php , version 1.3
  * Joseph Philbert, October 2015
  * Provides LDAP authentication and user functions.
  *
@@ -98,6 +98,10 @@ class AuthLdap {
      * Result of any connections etc.
      */
     var $result;
+    /**
+     * Set default ini memory Limit.
+     */
+    var $memory_limit;
 
     /**
      * Constructor- creates a new instance of the authentication class
@@ -116,6 +120,7 @@ class AuthLdap {
         $this->domain = $sDomain;
         $this->searchUser = $searchUser;
         $this->searchPassword = $searchPassword;
+        $this->memory_limit = '1024M';
     }
     
     // 2.1 Connection handling methods -------------------------------------------
@@ -495,6 +500,11 @@ class AuthLdap {
 		}
 		
         $info = @ldap_get_entries( $this->connection, $this->result);
+		
+		//Change memory limit for large AD domains
+			$oldLimit = ini_get( 'memory_limit');
+			ini_set( 'memory_limit', $this->memory_limit);
+
         for( $i = 0; $i < $info["count"]; $i++) {
             // Get the username, and create an array indexed by it...
             // Modify these as you see fit.
@@ -505,9 +515,9 @@ class AuthLdap {
                 if (strtolower($attributeArray[$j]) == "dn") {
                     $userslist["$i"]["$attributeArray[$j]"]      = $info[$i][strtolower($attributeArray[$j])];
                 } else if (strtolower($attributeArray[$j]) == "objectsid") {
-					$userslist["$i"]["$attributeArray[$j]"]      = $this->SIDtoString($info[$i][strtolower($attributeArray[$j])][0]);              
+					$userslist["$i"]["$attributeArray[$j]"] = $this->SIDtoString($info[$i][strtolower($attributeArray[$j])][0]);              
 				} else if (strtolower($attributeArray[$j]) == "objectguid") {
-					$userslist["$i"]["$attributeArray[$j]"] = bin2hex($info[$i][strtolower($attributeArray[$j])][0]);                               
+					$userslist["$i"]["$attributeArray[$j]"] = $this->GUIDtoString($info[$i][strtolower($attributeArray[$j])][0]);                               
 				} else {
 					//Check if value is array
 					if (is_array($info[$i][strtolower($attributeArray[$j])])){
@@ -518,7 +528,7 @@ class AuthLdap {
                 }
             }
         }
-
+		ini_set( 'memory_limit', $oldLimit );
         if ( !@is_array( $userslist)) {
             /* Sort into alphabetical order. If this fails, it's because there
             ** were no results returned (array is empty) - so just return false.
@@ -581,45 +591,20 @@ class AuthLdap {
 		   return $sid;
 		}
 		
-	function GUIDtoString($ADguid)
+	function GUIDtoString($guid)
 		{
-		   $guidinhex = str_split(bin2hex($ADguid), 2);
-		   $guid = "";
-		   //Take the first 4 octets and reverse their order
-		   $first = array_reverse(array_slice($guidinhex, 0, 4));
-		   foreach($first as $value)
-		   {
-			  $guid .= $value;
-		   }
-		   $guid .= "-";
-		   // Take the next two octets and reverse their order
-		   $second = array_reverse(array_slice($guidinhex, 4, 2, true), true);
-		   foreach($second as $value)
-		   {
-			  $guid .= $value;
-		   }
-		   $guid .= "-";
-		   // Repeat for the next two
-		   $third = array_reverse(array_slice($guidinhex, 6, 2, true), true);
-		   foreach($third as $value)
-		   {
-			  $guid .= $value;
-		   }
-		   $guid .= "-";
-		   // Take the next two but do not reverse
-		   $fourth = array_slice($guidinhex, 8, 2, true);
-		   foreach($fourth as $value)
-		   {
-			  $guid .= $value;
-		   }
-		   $guid .= "-";
-		   //Take the last part
-		   $last = array_slice($guidinhex, 10, 16, true);
-		   foreach($last as $value)
-		   {
-			  $guid .= $value;
-		   }
-		   return $guid;
+		$hex_guid = unpack( "H*hex", $guid );
+		$hex    = $hex_guid["hex"];
+
+		$hex1   = substr( $hex, -26, 2 ) . substr( $hex, -28, 2 ) . substr( $hex, -30, 2 ) . substr( $hex, -32, 2 );
+		$hex2   = substr( $hex, -22, 2 ) . substr( $hex, -24, 2 );
+		$hex3   = substr( $hex, -18, 2 ) . substr( $hex, -20, 2 );
+		$hex4   = substr( $hex, -16, 4 );
+		$hex5   = substr( $hex, -12, 12 );
+
+		$guid = $hex1 . "-" . $hex2 . "-" . $hex3 . "-" . $hex4 . "-" . $hex5;
+
+		return $guid;
 		}
     /**
      * Sets and returns the appropriate dn, based on whether there
