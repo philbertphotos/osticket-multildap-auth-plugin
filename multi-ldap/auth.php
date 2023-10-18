@@ -331,7 +331,7 @@ class LdapMultiAuthPlugin extends Plugin {
 	 *
 	 */
 	function logger($priority, $title, $message, $verbose = false) {
-		if (self::getConfig($this->instance->ins)->get('debug-choice') && !$verbose || (self::getConfig($this->nstance->ins)->get('debug-verbose') && $verbose)) {
+		if (self::getConfig($this->instance->ins)->get('debug-choice') && !$verbose || (self::getConfig($this->instance->ins)->get('debug-verbose') && $verbose)) {
 			if (is_array($message) || is_object($message)) {
 				$message = json_encode($message);
 			}
