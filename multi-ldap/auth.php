@@ -752,7 +752,7 @@ static function _connectcheck() {
 						$staff['group_id'] = 1;
 						$staff['dept_id'] = $this->getConfig($this->instance->ins)->get('multiauth_staff_dept');
 						$staff['role_id'] = 1;
-						$staff['backend'] = "ldap";
+						$staff['backend'] = "mldap".$this->instance->backend;
 						$staff['assign_use_pri_role'] = "on";
 						$staff['isvisible'] = 1;
 						$staff['prems'] = array("visibility.agents", "visibility.departments");
