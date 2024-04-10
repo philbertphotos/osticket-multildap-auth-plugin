@@ -797,7 +797,7 @@ static function _connectcheck() {
 					$info['first'] = $info['first'];
 					$info['last'] = $info['last'];
 					$info['username'] = $info['username'];
-					$info['backend'] = 'mldap.client';
+					$info['backend'] = 'mldap.client'.$this->instance->backend;
 					$info['sendemail'] = false;
 
 					if ($cfg->getClientRegistrationMode() == "closed" && $this->getConfig($this->instance->ins)->get('multiauth-force-register')){
