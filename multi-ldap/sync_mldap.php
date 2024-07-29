@@ -75,7 +75,6 @@ class SyncLDAPMultiClass extends LDAPMultiAuthentication {
                 );
             }
         }
-
 		echo json_encode($conninfo);
     }
 	
@@ -114,9 +113,11 @@ class SyncLDAPMultiClass extends LDAPMultiAuthentication {
 			$ldap->searchUser = $data['bind_dn'];
 			$ldap->searchPassword = $data['bind_pw'];
 
+			$sync_map = $this->sync_map($this->config['sync_map'])[1]; //Get attr Array
+			
 			if ($ldap->connect()) {
-				$attr = str_getcsv(strtolower("samaccountname,mail,givenname,sn,whenchanged,useraccountcontrol,objectguid," . $this->config['sync_attr']) , ',');
-
+				$attr = str_getcsv(strtolower("samaccountname,mail,givenname,sn,whenchanged,useraccountcontrol,objectguid," . implode(',', $sync_map)) , ',');
+error_log(json_encode($attr));
 				if ($userlist = $ldap->getUsers('', $attr, $this->config['sync_filter'])) {
 					$combined_userlist = array_merge($combined_userlist, $userlist);
 				}
@@ -135,11 +136,13 @@ class SyncLDAPMultiClass extends LDAPMultiAuthentication {
 		global $ost;
 		try {
 			$sync_mail = Email::lookup(key(json_decode($this->config['sync_mailfrom'])));
-			error_log("to : ", json_encode($this->config['sync_mailto']));
-			$sync_mail->send($this->config['sync_mailto'], 'MultiLdap Report', $msg);
+			$set = $sync_mail->send($this->config['sync_mailto'], 'MultiLdap Report', $msg);
+			if(!$set)
+				$ost->logError('MLA Email Error', 'Error Mail not sent to' . $sync_mail, '');
+			
 		} catch (Exception $e) {
 			error_log("ERROR : " . $e->getMessage());
-			//$ost->logError('Mail alert posting issue!', $e->getMessage(), true);
+			$ost->logError('MLA Email Exception', 'Mail alert posting issue! :' . $e->getMessage(), true);
 		}
 	}
 
@@ -162,6 +165,20 @@ class SyncLDAPMultiClass extends LDAPMultiAuthentication {
 		return $object;
 	}
 
+	function sync_map($arr) {
+		$list = explode(",", $arr);
+			list( $ostmap, $ldapmap ) = array_reduce( $list,
+			  function( $arrlist, $item ) {
+				list( $l, $r ) = explode( ':', $item );
+				$arrlist[0][$l] = $arrlist[1][$r] = true;
+				return $arrlist;
+			  }, array(array(), array()));
+			 
+			$info_map[0] = array_keys(array_filter($ostmap));
+			$info_map[1] = array_keys(array_filter($ldapmap));
+		return $info_map;
+	}
+	
 	function contains($obj, $str) {
 		return strpos($obj, $str) !== false;
 	}
@@ -231,7 +248,7 @@ class SyncLDAPMultiClass extends LDAPMultiAuthentication {
 			$user_id = $user->user_id;
 			$cn = $user->cn;
 			$mail = $user->mail;
-			$office = $user->physicaldeliveryofficename;
+			//$office = $user->physicaldeliveryofficename;
 			$phone = $user->telephonenumber;
 			$full_name = $user->givenname . ' ' . $user->sn;
 			$user_name = $user->samaccountname;
@@ -241,10 +258,9 @@ class SyncLDAPMultiClass extends LDAPMultiAuthentication {
 			$synckey = $this->sync_info[$user->user_id];
 
 			//Get a list of attributes
-			$attrs = str_getcsv($this->config['sync_attr'], ',');
+			$attrs = $this->sync_map($this->config['sync_map'])[1];
 
 			foreach ($attrs as $attr) {
-				//$user->$attr = $user->$attr;
 				$logString = $logString . "'" . $attr . "'=" . $user->$attr . " ; ";
 			}
 
@@ -274,8 +290,6 @@ class SyncLDAPMultiClass extends LDAPMultiAuthentication {
 
 			foreach ($ost_contact_info_fields as $ost_contact_field => $ost_contact_info_field_ldapattr) {
 
-				// Debug
-				//echo "attr: ".$ost_contact_field.'</br>';
 				$current_field = $ost_contact_field;
 				$check_duplicate = "SELECT " . TABLE_PREFIX . "form_field.id, " . TABLE_PREFIX . "form_field.name, " . TABLE_PREFIX . "form_entry_values.value FROM " . TABLE_PREFIX . "user
 										LEFT JOIN " . TABLE_PREFIX . "user_account on " . TABLE_PREFIX . "user.id=" . TABLE_PREFIX . "user_account.user_id
@@ -284,7 +298,7 @@ class SyncLDAPMultiClass extends LDAPMultiAuthentication {
 										LEFT JOIN " . TABLE_PREFIX . "form_entry_values on " . TABLE_PREFIX . "form_entry.id=" . TABLE_PREFIX . "form_entry_values.entry_id
 										LEFT JOIN " . TABLE_PREFIX . "form_field on " . TABLE_PREFIX . "form_entry_values.field_id=" . TABLE_PREFIX . "form_field.id
 										WHERE  " . TABLE_PREFIX . "user_account.user_id =" . $user->user_id . " AND " . TABLE_PREFIX . "form.id = '1' AND " . TABLE_PREFIX . "form_field.name = '$current_field';";
-
+					//error_log($check_duplicate);
 				if ($current_field == 'phone' || $current_field == 'mobile') {
 					$current_ldap_value = $this->sanitize_phone($user->$ost_contact_info_field_ldapattr);
 				}
@@ -316,7 +330,7 @@ class SyncLDAPMultiClass extends LDAPMultiAuthentication {
 				}
 
 				if ($sql_value != $current_ldap_value) {
-					if (!empty($current_ldap_value)) {
+					//if (!empty($current_ldap_value)) {
 						if ($ost_contact_field != 'name') {
 							$update_ostuser_sql = "INSERT INTO " . TABLE_PREFIX . "form_entry_values(entry_id, field_id, value)
 									values (
@@ -331,6 +345,7 @@ class SyncLDAPMultiClass extends LDAPMultiAuthentication {
 						}
 
 						// update changed field
+						//error_log($update_ostuser_sql);
 						$result = db_query($update_ostuser_sql);
 						if (!$result) {
 							$this->log_report['status'] .= " (Error: [$ost_contact_field])";
@@ -339,7 +354,7 @@ class SyncLDAPMultiClass extends LDAPMultiAuthentication {
 						}
 						//update the field that was changed
 						$changed_attr[] = $ost_contact_field;
-					}
+					//}
 				}
 			}
 
@@ -499,9 +514,7 @@ class SyncLDAPMultiClass extends LDAPMultiAuthentication {
 				}	
 				$this->sync_info[$uid] = $sync;
 			}
-			
-			//error_log("AY" . json_encode($this->sync_info));
-			//ost->logWarning('sybc (' . json_encode($this->sync_info) . ')', false);			
+						
 			//Query only users that have no guid.
 			$qry_ostusers = db_query("SELECT " . TABLE_PREFIX . "user.id as user_id, 
 										" . TABLE_PREFIX . "user_email.id as email_id," . TABLE_PREFIX . "user.name, " . TABLE_PREFIX . "user_email.address as mail 
@@ -555,7 +568,7 @@ class SyncLDAPMultiClass extends LDAPMultiAuthentication {
 				if (!empty($guid_users["$guidkey"])){
 					$guid_users["$guidkey"]->user_id = $guid['id'];		
 					if ($_REQUEST['full'] || $this->config['sync_full']) {
-						$updateusers[] = $guid_users["$guidkey"];
+						$updateusers[] = $guid_users["$guidkey"]; 
 					}
 					elseif ($guid['updated'] !== $this->changetime($guid_users["$guidkey"]->whenchanged)) {
 						$updateusers[] = $guid_users["$guidkey"];
@@ -565,10 +578,10 @@ class SyncLDAPMultiClass extends LDAPMultiAuthentication {
 
 			$log_header = ("(" . db_num_rows($qry_ostusers) . ') users not in ldap.<br>');
 			$log_header = ("(" . (!empty($g) ? $g : '0') . ') users renamed.<br>');
-			$log_header = ("(" . count($this->sync_info) . ') total users.<br>');			
-			$log_header = ("(" . count($updateusers) . ') users synced.<br>');
-			$this->sync_results['updatedusers'] = count($updateusers);
-			$this->sync_results['totalusers'] = count($this->sync_info);
+			$log_header = ("(" . (is_countable($this->sync_info) ? count($this->sync_info) : '0') . ') total users.<br>');			
+			$log_header = ("(" . (is_countable($updateusers) ? count($updateusers) : '0'). ') users synced.<br>');
+			$this->sync_results['updatedusers'] = (is_countable($updateusers) ? count($updateusers) : '0');
+			$this->sync_results['totalusers'] = (is_countable($this->sync_info) ? count($this->sync_info) : '0');
 			
 			//update all user attributes.
 			$this->update_users($updateusers);
@@ -582,10 +595,11 @@ class SyncLDAPMultiClass extends LDAPMultiAuthentication {
 		
 		$this->sync_results['executetime'] = $execution_time;
 		$msg = $log_header . $log_table . $this->log_report['agent'] . $this->log_report['body'] . $log_footer . $log_debug;
-
-		if ($this->sync_results['updatedusers'] >= 1 && $this->config['sync_reports'])
+		
+		if ($this->sync_results['updatedusers'] >= 1 && $this->config['sync_reports']){
 			$this->sendAlertMsg($msg);
-
+		}
+		
 		return $this->sync_results;
 	}
 }
