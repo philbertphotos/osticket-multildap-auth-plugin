@@ -45,12 +45,15 @@ Configuration
 =============
 It is pretty stright forward just when adding the second domain make user you put a "," or ";" where needed.
 see image below
-![Alt text](http://osticket.com/forum/uploads/FileUpload/25/721454d41a5d02335570dc6db6eb59.png "Config Page")
+sync settings
+![image](https://github.com/user-attachments/assets/6712c595-5dce-4545-8b4d-8411f76a35a6)
 CRON JOBS required for user syncing to run.
 
 In my environment we have a Parent and Child domain
 Parent domain 8000+ users
 Child domain 20,000+ users
+
+
 
 It syncs both the agents and users without issues with about 1000+ users registered automatically.
 Made plugin backward compatible with older versions.
