@@ -310,46 +310,6 @@ class LdapMultiAuthPluginConfig extends PluginConfig {
 				'hint' => $__('Set schedule based on string examples: "5 minutes", "1 hour", "1 day", 
 				"next Thursday", "1 week", "weekdays 1AM", "2 weekends", "2 days", "4 hours", "10 September 2000"') ,
 			)) ,
-			'reset_schedule' => new BooleanField(array(
-				'id' => 'reset_schedule',
-				'label' => $__('Reset Schedule') ,
-				'default' => false,
-				'configuration' => array(
-					'desc' => $__('Reset/Update schedule on save')
-				)
-			)) ,
-			'sync_data_info' => new SectionBreakField(array(
-				'label' => $__('Next schedule: ' . $this->getschedule()) ,
-				'hint' => $__('Last run: ' . $this->getlastschedule()) ,
-			)) ,
-			'sync_reports' => new BooleanField(array(
-				'id' => 'sync_reports',
-				'label' => $__('Email Reporting') ,
-				'default' => false,
-				'configuration' => array(
-					'hint' => $__('Check if you want reports emailed')
-				)
-			)) ,
-			'sync_mailfrom' => new ChoiceField(array(
-				'id' => 'sync_mailfrom',
-				'label' => 'From email address',
-				'default' => 1,
-				'choices' => $from_choices,
-				'configuration' => array(
-					'hint' => 'This list the internal email accounts choose one that fits best.'
-				)
-			)) ,
-			'sync_mailto' => new TextboxField(array(
-				'id' => 'sync_mailto',
-				'label' => 'Report address',
-				'default' => '',
-				'hint' => 'Email address that reports will be sent to',
-				'configuration' => array(
-					'size' => 30,
-					'length' => 30
-				) ,
-			)) ,
-			
 			'sync_map' => new TextareaField(array(
 				'label' => $__('Sync Attribute MAP') ,
 				'hint' => $__('Add the values you need to match Osticket to LDAP attributes example: <br>"<strong>name:cn, phone:telephonenumber, notes:info</strong>" first is the osticket attibute then ldap varible comma-limited') ,
@@ -409,6 +369,45 @@ class LdapMultiAuthPluginConfig extends PluginConfig {
 				'configuration' => array(
 					'desc' => $__('Check this to do a Full Sync')
 				)
+			)) ,
+			'reset_schedule' => new BooleanField(array(
+				'id' => 'reset_schedule',
+				'label' => $__('Reset Schedule') ,
+				'default' => false,
+				'configuration' => array(
+					'desc' => $__('Reset/Update schedule on save')
+				)
+			)) ,
+			'sync_data_info' => new SectionBreakField(array(
+				'label' => $__('Next schedule: ' . $this->getschedule()) ,
+				'hint' => $__('Last run: ' . $this->getlastschedule()) ,
+			)) ,
+			'sync_reports' => new BooleanField(array(
+				'id' => 'sync_reports',
+				'label' => $__('Email Reporting') ,
+				'default' => false,
+				'configuration' => array(
+					'hint' => $__('Check if you want reports emailed')
+				)
+			)) ,
+			'sync_mailfrom' => new ChoiceField(array(
+				'id' => 'sync_mailfrom',
+				'label' => 'From email address',
+				'default' => 1,
+				'choices' => $from_choices,
+				'configuration' => array(
+					'hint' => 'This list the internal email accounts choose one that fits best.'
+				)
+			)) ,
+			'sync_mailto' => new TextboxField(array(
+				'id' => 'sync_mailto',
+				'label' => 'Report address',
+				'default' => '',
+				'hint' => 'Email address that reports will be sent to',
+				'configuration' => array(
+					'size' => 30,
+					'length' => 30
+				) ,
 			)) ,
 			'multiauth-debug' => new SectionBreakField(array(
 				'label' => $__('Debug Mode') ,
