@@ -36,8 +36,6 @@ class LdapMultiAuthPluginConfig extends PluginConfig {
 		$sync_val = json_decode($this->config['sync_data']->ht['value']);
 		$time_zone = db_result(db_query("SELECT value FROM `" . TABLE_PREFIX . "config` WHERE `key` = 'default_timezone'"));
 		$scheduletime = LDAPMultiAuthentication::DateFromTimezone(strftime("%Y-%m-%d %H:%M", $sync_val->schedule) , 'UTC', $time_zone, 'F d Y g:i a');
-		//$ost->logWarning('getschedule', $sync_val . " - " . $scheduletime . " - " . $time_zone, false);	
-		//return gmdate("F d Y g:i a", $sync_val->schedule);
 		return $scheduletime;
 	}	
 	
@@ -50,8 +48,6 @@ class LdapMultiAuthPluginConfig extends PluginConfig {
 
 	function checkschedule($update = false) {
 		global $ost;
-		//$ost->logWarning('config-this', json_encode($this), false);		
-		
 		$current_schedule = $this->config['sync_schedule']
 			->ht['value'];
 		$new_schedule = $this->getForm()
@@ -62,27 +58,14 @@ class LdapMultiAuthPluginConfig extends PluginConfig {
 			$id = substr($this->section, -1);
 			$schedule = json_encode(array("schedule"=>strtotime($current_schedule),"lastrun"=>time()));
 			$sql = 'INSERT INTO `' . TABLE_PREFIX . 'config` (namespace,`key`,value, updated)
-					VALUES ("' . $this->config['sync_data']->ht['namespace'] . '","sync_data", \''.$schedule.'\', CURRENT_TIMESTAMP)
+					VALUES ("' . $this->config['sync_schedule']->ht['namespace'] . '","sync_data", \''.$schedule.'\', CURRENT_TIMESTAMP)
 					ON DUPLICATE KEY UPDATE  `value` = \''.$schedule.'\', `updated` = CURRENT_TIMESTAMP';
 			
 			$query = db_query($sql);
-			//$ost->logWarning('Update user backend', 'Rows affected: ' . db_affected_rows(), false);
 			return $query;
 		}
 		return false;
 	}
-	
-	//Checks if osticket supports instances
-	/*function plugininstance() {
-		if (method_exists('this','getInstances')) {
-			$id = substr($this->section, -1);
-			$ins = $this->getInstances($id)->key['plugin_id'];
-			$this->instance = (object)array('plugin' => "plugin.".$id.".instance.".$ins);
-			$this->instance = (object)array('backend' => "p.".id.".i.".$ins);
-		} else {
-			$this->instance = (object)array('plugin' => "plugin.".$id);
-		}
-	}*/
 	
 	//List osticket accounts
 	function FromMail()
@@ -176,7 +159,7 @@ class LdapMultiAuthPluginConfig extends PluginConfig {
 				'default' => '(&(objectCategory=person)(objectClass=user)(|(sAMAccountName={q}*)(firstName={q}*)(lastName={q}*)(displayName={q}*)))',
 				'configuration' => array(
 					'size' => 70,
-					'length' => 120
+					'length' => 300
 				) ,
 			)) ,
             'sync_check' => new FreeTextField(array(
@@ -235,6 +218,42 @@ class LdapMultiAuthPluginConfig extends PluginConfig {
 					'desc' => $__('Enable authentication of clients')
 				)
 			)) ,
+			'security-modes' => new SectionBreakField(array(
+				'label' => $__('Security Modes') ,
+				'hint' => $__('Sets security for clients and staff
+                    members can be enabled and disabled independently (use semicolons for multiple groups)') ,
+			)) ,
+			
+			'multiauth-admin-group' => new TextboxField(array(
+				'id' => 'adminldapgroup',
+				'label' => $__('Admin') ,
+				'default' => 'Domain Admins',
+				'configuration' => array(
+					'size' => 40,
+					'length' => 60
+				) ,
+				'hint' => $__('Admin registration group membership') ,
+			)) ,			
+			'multiauth-staff-group' => new TextboxField(array(
+				'id' => 'staffldapgroup',
+				'label' => $__('Staff') ,
+				'default' => 'Domain Admins',
+				'configuration' => array(
+					'size' => 40,
+					'length' => 60
+				) ,
+				'hint' => $__('Staff registration group membership') ,
+			)) ,
+			'multiauth-client-group' => new TextboxField(array(
+				'id' => 'clientldapgroup',
+				'label' => $__('Client') ,
+				'default' => 'Domain Users',
+				'configuration' => array(
+					'size' => 40,
+					'length' => 60
+				) ,
+				'hint' => $__('Client registration group membership') ,
+			)) ,			
 			'reg-modes' => new SectionBreakField(array(
 				'label' => $__('Registration Modes') ,
 				'hint' => $__('Registration modes for clients and staff
@@ -253,16 +272,6 @@ class LdapMultiAuthPluginConfig extends PluginConfig {
 				'configuration' => array(
 					'desc' => $__('Register staff member to be registered automatically')
 				)
-			)) ,
-			'multiauth-staff-group' => new TextboxField(array(
-				'id' => 'staffldapgroup',
-				'label' => $__('Staff Group') ,
-				'default' => 'Domain Admins',
-				'configuration' => array(
-					'size' => 40,
-					'length' => 60
-				) ,
-				'hint' => $__('Staff registration group membership (use semicolons for multiple groups)') ,
 			)) ,
 			'multiauth_staff_dept' => new ChoiceField(array(
 				'label' => 'Default Department for Staff',
@@ -298,7 +307,7 @@ class LdapMultiAuthPluginConfig extends PluginConfig {
 					'size' => 40,
 					'length' => 40
 				) ,
-				'hint' => $__('Set schedule based on string examples: "10 minutes", "1 hour", "+1 day", 
+				'hint' => $__('Set schedule based on string examples: "5 minutes", "1 hour", "1 day", 
 				"next Thursday", "1 week", "weekdays 1AM", "2 weekends", "2 days", "4 hours", "10 September 2000"') ,
 			)) ,
 			'reset_schedule' => new BooleanField(array(
@@ -340,20 +349,11 @@ class LdapMultiAuthPluginConfig extends PluginConfig {
 					'length' => 30
 				) ,
 			)) ,
-			'sync_attr' => new TextareaField(array(
-				'label' => $__('LDAP Attributes') ,
-				'hint' => $__('List the LDAP attributes to use" ') ,
-				'default' => 'cn,telephonenumber,physicalDeliveryOfficeName',
-				'configuration' => array(
-					'html' => false,
-					'rows' => 2,
-					'cols' => 70
-				) ,
-			)) ,
+			
 			'sync_map' => new TextareaField(array(
-				'label' => $__('Sync Map') ,
-				'hint' => $__('Map contact variables to LDAP attributes example: <br>"<strong>name:cn, phone:telephonenumber</strong>" ') ,
-				'default' => 'name:cn, phone:telephonenumber',
+				'label' => $__('Sync Attribute MAP') ,
+				'hint' => $__('Add the values you need to match Osticket to LDAP attributes example: <br>"<strong>name:cn, phone:telephonenumber, notes:info</strong>" first is the osticket attibute then ldap varible comma-limited') ,
+				'default' => 'name:cn, phone:telephonenumber, notes:info',
 				'configuration' => array(
 					'html' => false,
 					'rows' => 2,
@@ -443,7 +443,19 @@ class LdapMultiAuthPluginConfig extends PluginConfig {
                 server');
 			return;
 		} 
-
+		
+		if ($this->getForm()->getField('sync-agents')->getValue() || $this->getForm()->getField('sync-users')->getValue()){
+			
+			/*$time_zone = db_result(db_query("SELECT value FROM `" . TABLE_PREFIX . "config` WHERE `key` = 'default_timezone'"));
+			$schedule = LDAPMultiAuthentication::DateFromTimezone(strftime("%Y-%m-%d %H:%M", $sync_val->schedule) , 'UTC', $time_zone, 'F d Y g:i a');
+			$sql = "SELECT value FROM `" . TABLE_PREFIX . "config` (`namespace`, `key`,`value`,`updated`) 
+				SELECT '".$this->config['sync_schedule']->ht['namespace']."', 'sync_data', '".$schedule.", `updated` = CURRENT_TIMESTAMP' FROM DUAL
+				WHERE NOT EXISTS (SELECT * FROM `ost_config` WHERE `namespace`= '".$this->config['sync_schedule']->ht['namespace']."' 
+				AND `key`='sync_data' LIMIT 1)";
+			db_result(db_query($sql));
+				echo $sql;*/
+		}
+		
 		if (empty($config['sync_mailto']) && $this->getForm()->getField('sync_reports')->getValue()) {
 			$ost->setWarning($__('You need to add report email'));
 			$errors['err'] = $__('Report email address cannot be blank');
@@ -485,6 +497,7 @@ class LdapMultiAuthPluginConfig extends PluginConfig {
 
 		if ($config['reset_schedule']){
 				$config['reset_schedule'] = false;
+				//echo "test";
 		}
 			
 		$ldapdata = array();
