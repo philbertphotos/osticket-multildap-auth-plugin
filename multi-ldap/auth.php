@@ -13,65 +13,57 @@ define('MULTI_PLUGIN_ROOT', __DIR__ . '/');
 
 require_once ('config.php');
 
-
 class LdapMultiAuthPlugin extends Plugin {
 	var $config_class = 'LdapMultiAuthPluginConfig';
 	var $crontime;
-
-    static $pluginInstance = null;
+	static $pluginInstance = null;
 
     private function getPluginInstance(?int $id){
-	if($id && ($i = $this->getInstance($id))){
-	    return $i;
-	}
-	return $this->getInstances()->first();
+		if ($id && ($i = $this->getInstance($id))){
+			return $i;
+		}
+		return $this->getInstances()->first();
     }
-  
-   public function __construct($id) {
+	
+	public function __construct($id) {
     parent::__construct($id);
-    //self::$pinstance = $this;
-  } 
-  
-  
+	}
+	
 	function bootstrap() {
-		self::$pluginInstance = self::getPluginInstance(null);
-		 // get plugin instances
-		
-		
+		$this->plugininstance();
 		if ($this->firstRun()) {
 			if (!$this->configureFirstRun()) {
 				return false;
 			}
 		}
 		else if ($this->needUpgrade()) {}
-		$this->plugininstance();
+
 		$this->loadSync();
 		$config = $this->getConfig();
-		$instance = $this->config->instance;
-		$instance_id = $this->getId();
+		$id = $this->id;
 		Signal::connect('cron', array(
 			$this,
 			'onCronProcessed'
 		));
-
+			
 		if ($config->get('multiauth-staff')) StaffAuthenticationBackend::register(new StaffLDAPMultiAuthentication($config));
 		if ($config->get('multiauth-client')) UserAuthenticationBackend::register(new ClientLDAPMultiAuthentication($config));
 	}
 	
 	//Checks if osticket supports instances
 	function plugininstance() {
-			$this->pinstance = new stdClass();
+		global $ost;
+			self::$pluginInstance = self::getPluginInstance(null);
+			//$this->pluginInstance = self::getPluginInstance(null);
+			$this->instance = new stdClass();
 		if (method_exists($this,'getInstances')) {
-			//error_log('method_exists YES ');
 			$ins = $this->getInstances($this->id)->key['plugin_id'];
-			$this->pinstance->plugin = "plugin.".$this->id.".instance.".$ins;
-			$this->pinstance->backend = ".p".$this->id."i".$ins;
-			$this->pinstance->staff = ".p".$this->id."i".$ins;
-			$this->pinstance->ins = $this->getInstances()->first();
-			//error_log('ins YES ' .$this->pinstance->plugin);
+			$this->instance->plugin = "plugin.".$this->id.".instance.".$ins;
+			$this->instance->backend = ".p".$this->id."i".$ins;
+			$this->instance->staff = ".p".$this->id."i".$ins;
+			$this->instance->ins = $this->getInstances()->first();
 		} else {
-			$this->pinstance->plugin = "plugin.".$this->id;
-			//error_log('method_exists NO ');
+			$this->instance->plugin = "plugin.".$this->id;
 		}
 	}
 	
@@ -80,6 +72,7 @@ class LdapMultiAuthPlugin extends Plugin {
 		if (db_num_rows(db_query($sql))) {
 			if (!file_exists(ROOT_DIR.'scp/sync_mldap.php') || (md5_file(MULTI_PLUGIN_ROOT.'sync_mldap.php') != @md5_file(ROOT_DIR.'scp/sync_mldap.php'))){
 				$this->sync_copy();
+				//$this->logger('warning', 'Sync Copy', '');
 			}
 			include_once (ROOT_DIR.'scp/sync_mldap.php');
 		}
@@ -101,14 +94,14 @@ class LdapMultiAuthPlugin extends Plugin {
 		if (!$this->getConfig(self::$pluginInstance)->get('sync-users') || !$this->getConfig(self::$pluginInstance)->get('sync-agents')){
 			//return;
 		}
-		
+		$instance = $this->getConfig(self::$pluginInstance)->config['sync_data']->ht['namespace'];
 		$this->time_zone = db_result(db_query("SELECT value FROM `" . TABLE_PREFIX . "config` WHERE `key` = 'default_timezone'"));		
 		
 		
-		$sync_info = db_fetch_row(db_query('SELECT value FROM ' . TABLE_PREFIX . 'config WHERE namespace = "' . $this->pinstance->plugin . '" AND `key` = "sync_data";')) [0];		
+		$sync_info = db_fetch_row(db_query('SELECT value FROM ' . TABLE_PREFIX . 'config WHERE namespace = "' . $instance . '" AND `key` = "sync_data";')) [0];		
 		
 		$jsondata = json_decode($sync_info);
-		//$this->logger('warning', "sync info", ($jsondata), true);
+			$this->logger('warning', "MLA sync info", ($jsondata), true);
 		$schedule = $this->DateFromTimezone(strftime("%Y-%m-%d %H:%M:%S", $jsondata->schedule) , 'UTC', $this->time_zone, 'F j, Y, H:i');
 		$lastrun = $this->DateFromTimezone(strftime("%Y-%m-%d %H:%M:%S", $jsondata->lastrun) , 'UTC', $this->time_zone, 'F j, Y, H:i');
 		$this->executed = time();
@@ -120,9 +113,9 @@ class LdapMultiAuthPlugin extends Plugin {
 		$this->loadSync();
 			
 			//Load Sync info
-			$sync = new SyncLDAPMultiClass($this->pinstance);
+			$sync = new SyncLDAPMultiClass($instance);
 			$allowaction = $this->allowAction();
-				$this->logger('warning', 'MLA Allow Check - '.$this->getConfig()->get('basedn'), 'allow action : '. var_export($allowaction, 1), true);
+				$this->logger('warning', 'MLA Allow Check - '.$this->getConfig()->get('shortdomain'), 'allow action : '. var_export($allowaction, 1), true);
 					
 		if ($allowaction) {
 			if ($this->getConfig()->get('sync-users') || $this->getConfig()->get('sync-agents')) {
@@ -145,7 +138,7 @@ class LdapMultiAuthPlugin extends Plugin {
 	function sync_cron($minDelay = false) {
 		//outputs both keys in array
 		$sync_info = db_assoc_array(db_query('SELECT * FROM ' . TABLE_PREFIX . 'config 
-		WHERE namespace = "' . $this->pinstance->plugin . '" AND `key` = "sync_schedule" OR `key` = "sync_data";') , MYSQLI_ASSOC);
+		WHERE namespace = "' . $this->instance->plugin . '" AND `key` = "sync_schedule" OR `key` = "sync_data";') , MYSQLI_ASSOC);
 		$this->minDelay = NULL;
 		if ($minDelay) $this->minDelay = $minDelay;
 
@@ -205,7 +198,7 @@ class LdapMultiAuthPlugin extends Plugin {
 	//last modification time.
 	function getEventUpdatedTime() {
 		$updated = db_fetch_row(db_query('SELECT UNIX_TIMESTAMP(updated) as updated FROM ' . TABLE_PREFIX . 'config 
-					WHERE namespace = "' . $this->pinstance->plugin . '" AND `key` = "sync_data";')) [0];
+					WHERE namespace = "' . $this->instance->plugin . '" AND `key` = "sync_data";')) [0];
 		if (isset($updated)) {
 			$FT = $updated;
 		}
@@ -217,7 +210,7 @@ class LdapMultiAuthPlugin extends Plugin {
 
 	function sync_data($key, $val) {
 		$json_str = db_fetch_row(db_query('SELECT value FROM ' . TABLE_PREFIX . 'config 
-					WHERE namespace = "' . $this->pinstance->plugin . '" AND `key` = "sync_data";')) [0];
+					WHERE namespace = "' . $this->instance->plugin . '" AND `key` = "sync_data";')) [0];
 		$data = @json_decode($json_str, true);
 		if (!is_object($data)) return json_encode(array(
 			'schedule' => strtotime($this->cront['format']) ,
@@ -231,16 +224,19 @@ class LdapMultiAuthPlugin extends Plugin {
 		global $ost;
 		$data = $this->sync_data('lastrun', $tme);
 		$sql = 'UPDATE `' . TABLE_PREFIX . 'config` SET `value` =  \'' . ($data) . '\' , updated = CURRENT_TIMESTAMP
-                WHERE `key` = "sync_data" AND `namespace` = "' . $this->pinstance->plugin . '";';
-			$this->logger('warning','MLA updateLastrun', ($sql), true);
+                WHERE `key` = "sync_data" AND `namespace` = "' . $this->instance->plugin . '";';
+			if (self::getConfig()->get('debug-verbose'))
+				$ost->logDebug('MLA updateLastrun', ($sql), false);
 		return db_query($sql);
 	}
 
 	function updateSchedule() {
+		global $ost;
 		$data = $this->sync_data('schedule', $this->cront['schedule']);
 		$sql = 'UPDATE `' . TABLE_PREFIX . 'config` SET `value` = \'' . ($data) . '\', updated = CURRENT_TIMESTAMP
-                        WHERE `key` = "sync_data" AND `namespace` = "' . $this->pinstance->plugin . '";';
-			$this->logger('warning','MLA updateSchedule', ($sql), true);
+                        WHERE `key` = "sync_data" AND `namespace` = "' . $this->instance->plugin . '";';
+			if (self::getConfig()->get('debug-verbose'))
+				$ost->logDebug('MLA updateSchedule', ($sql), false);
 		$result = db_query($sql);
 		return $result;
 	}
@@ -251,7 +247,9 @@ class LdapMultiAuthPlugin extends Plugin {
 	 * @return boolean
 	 */
 	function firstRun() {
+		//echo json_encode($this->getInstance(1), JSON_PARTIAL_OUTPUT_ON_ERROR);
 		//Look for plugin sync table
+		//$this->logger('warning', 'firstRun', '');
 		$sql = "SHOW TABLES LIKE '". TABLE_PREFIX ."ldap_sync'";
 		$res = db_query($sql);
 		$rows = db_num_rows($res);
@@ -297,10 +295,10 @@ class LdapMultiAuthPlugin extends Plugin {
 	 * @return boolean
 	 */
 	function startUpgrade() {
-		$clientsql = "UPDATE " . TABLE_PREFIX ."user_account as ua SET `backend` = 'mldap.client".$this->pinstance->backend."' WHERE `backend` LIKE CONCAT('ldap.client', '%') 
+		$clientsql = "UPDATE " . TABLE_PREFIX ."user_account as ua SET `backend` = 'mldap.client".$this->instance->backend."' WHERE `backend` LIKE CONCAT('ldap.client', '%') 
 					AND ua.user_id IN (SELECT Id FROM " . TABLE_PREFIX ."ldap_sync WHERE ua.user_id = id)";
 					
-		$staffsql = "UPDATE `" . TABLE_PREFIX ."staff as st SET `backend` = 'mldap".$this->pinstance->backend."' WHERE `backend` LIKE CONCAT('ldap', '%') AND staff.staff_Id IN 
+		$staffsql = "UPDATE `" . TABLE_PREFIX ."staff as st SET `backend` = 'mldap".$this->instance->backend."' WHERE `backend` LIKE CONCAT('ldap', '%') AND staff.staff_Id IN 
 					(SELECT Id FROM " . TABLE_PREFIX ."ldap_sync WHERE Id = st.staff_Id);";
 
 			//Update User table for new plug-in instance information.
@@ -314,7 +312,7 @@ class LdapMultiAuthPlugin extends Plugin {
 	 * Necessary functionality to configure first run of plug-in application
 	 */
 	function configureFirstRun() {		
-		$this->logger('warning', 'MLA FirstRun', 'config', false, true);
+		$this->logger('warning', 'MLA_FirstRun', 'config');
 		return $this->sync_copy();
 	}
 
@@ -348,10 +346,26 @@ class LdapMultiAuthPlugin extends Plugin {
 	 * @return boolean
 	 */
 	function pre_uninstall(&$errors) {
-		$this->logger('warning', 'MLA-uninstall', $errors,false, true);
 		db_query("DROP TABLE IF EXISTS " . TABLE_PREFIX . "ldap_sync");
+			$this->logger('warning', 'MLA-uninstall', "removed ldap_sync Table". $errors, false, true);
 		$result = unlink(ROOT_DIR.'scp/sync_mldap.php');
-		return true;
+		if ($result) {
+			return true;
+		} else {
+			$this->logger('warning', 'MLA-uninstal', "File removal error " . $errors, false, true);
+		return false;
+		}
+	}
+
+	/**
+	 * Check if this is array or object
+	 *
+	 */
+	function isRealObject($arrOrObject) {
+		if (is_object($arrOrObject))
+			return true;
+		$keys = array_keys($arrOrObject);
+		return implode('', $keys) != implode(range(0, count($keys)-1));
 	}
 	
 	/**
@@ -360,8 +374,8 @@ class LdapMultiAuthPlugin extends Plugin {
 	 */
 	function logger($priority, $title, $message, $verbose = false, $force = false) {
 		
-			if (is_array($message) || is_object($message)) {
-				$message = json_encode($message);
+			if (!is_scalar($message)) {
+				$message = json_encode($message, JSON_PARTIAL_OUTPUT_ON_ERROR);
 			}
 			
 			//We are providing only 3 levels of logs. Windows style.
@@ -409,9 +423,8 @@ class LdapMultiAuthPlugin extends Plugin {
 				break;				
 			}
 	}
-
+	
 	function sync_copy() {
-		global $ost;
 		$pgfile = MULTI_PLUGIN_ROOT.'sync_mldap.php';
 		$scpfile = ROOT_DIR.'scp/sync_mldap.php';
 		if (!file_exists($scpfile)){
@@ -537,57 +550,6 @@ class LDAPMultiAuthentication {
 		return $ldap;
 	}
 
-static function _connectcheck() {
-        $conninfo = array();
-        $ldapinfo = array();
-
-		foreach (preg_split('/;/', $this->config['basedn']) as $i => $dn) {
-			$dn = trim($dn);
-			$servers = $this->config['servers'];
-			$serversa = preg_split('/\s+/', $servers);
-
-			$sd = $this->config['shortdomain'];
-			$sda = preg_split('/;|,/', $sd);
-
-			$bind_dn = $this->config['bind_dn'];
-			$bind_dna = preg_split('/;/', $bind_dn) [$i];
-
-			$bind_pw = $this->config['bind_pw'];
-			$bind_pwa = preg_split('/;|,/', $bind_pw) [$i];
-
-			$ldapinfo[] = array(
-				'dn' => $dn,
-				'sd' => $sda[$i],
-				'servers' => trim($serversa[$i]) ,
-				'bind_dn' => trim($bind_dna) ,
-				'bind_pw' => trim($bind_pwa)
-			);
-		}	
-
-        foreach ($ldapinfo as $data) {
-            $ldap = new AuthLdap();
-            $ldap->serverType = 'ActiveDirectory';
-            $ldap->server = preg_split('/;|,/', $data['servers']);
-            $ldap->domain = $data['sd'];
-            $ldap->dn = $data['dn'];
-            $ldap->useSSL = $data['ssl'];
-
-            if ($ldap->connect()) {
-                $conninfo[] = array(
-                    'bool' => true,
-                    'msg' => $data['sd'] . ' Connected OK!'
-                );
-            }
-            else {
-                $conninfo[] = array(
-                    false,
-                    $data['sd'] . " error:" . $ldap->ldapErrorCode . ": " . $ldap->ldapErrorText
-                );
-            }
-        }
-
-		echo json_encode($conninfo);
-    }
 	static function connectcheck($ldapinfo) {
 		$conninfo = array();
 		foreach ($ldapinfo as $data) {
@@ -614,33 +576,35 @@ static function _connectcheck() {
 	}
 
 	function flatarray($values) {
+		global $ost;			
 		$object = array();
-		foreach ($values[0] as $key => $value) {
-			if (preg_match('/(?<!\S)\d{1,2}(?![^\s.,?!])/', $key) > 0 || $key == 'count') continue;
-			$object[$key] = $value[0];
+		foreach ($values as $k => $items) {
+			foreach ($items as $key => $item) {
+				$object[$k][$key] = $item["0"];
+			}
 		}
-		return $object;
+		//$ost->logWarning('object', json_encode($object), false);
+		return $object; //remove [0] inclulde multiple arrays
 	}
-	
+
 	function ldapinfo() {
 		$ldapinfo;
-
-		foreach (preg_split('/;/', $this->getConfig()
+		foreach (preg_split('/;/', $this->getConfig($this->instance->ins)
 			->get('basedn')) as $i => $dn) {
 			$dn = trim($dn);
-			$servers = $this->getConfig()
+			$servers = $this->getConfig($this->instance->ins)
 				->get('servers');
 			$serversa = preg_split('/\s+/', $servers);
 
-			$sd = $this->getConfig()
+			$sd = $this->getConfig($this->instance->ins)
 				->get('shortdomain');
 			$sda = preg_split('/;|,/', $sd);
 
-			$bind_dn = $this->getConfig()
+			$bind_dn = $this->getConfig($this->instance->ins)
 				->get('bind_dn');
 			$bind_dna = preg_split('/;/', $bind_dn) [$i];
 
-			$bind_pw = $this->getConfig()
+			$bind_pw = $this->getConfig($this->instance->ins)
 				->get('bind_pw');
 			$bind_pwa = preg_split('/;|,/', $bind_pw) [$i];
 
@@ -657,9 +621,8 @@ static function _connectcheck() {
 
 	function authenticate($username, $password = null) {		
 		global $ost;
-		
 		if (!$password) {
-			$ost->logWarning('auth (' . $username . ')', "", false);
+			$ost->logWarning('MLA auth (' . $username . ')', "password blank or null", false);
 			return null;
 		}
 		//check if they used their email to login.
@@ -683,7 +646,7 @@ static function _connectcheck() {
 			else {
 				$conninfo['bool'] = false;
 				$conninfo['msg'] = ($data['sd'] . " error: " . $ldap->ldapErrorCode . " - " . $ldap->ldapErrorText);
-				$ost->logWarning('connect error (' . $username . ')', $conninfo['msg'], false);
+					$ost->logWarning('MLA connect error (' . $username . ')', $conninfo['msg'], false);
 				continue;
 			}
 
@@ -705,20 +668,22 @@ static function _connectcheck() {
 			$ldap->searchUser = $data['bind_dn'];
 			$ldap->searchPassword = $data['bind_pw'];
 
-			$user_info = $ldap->getUsers($username, $this->adschema()); //Update Debug Logs
-			if ($chkUser) break; //Break if user authenticated
-			
+			if ($chkUser) break; //Break if user authenticated			
 		} //end foreach
+		
 		if (($conninfo['bool'] == false || $loginfo['bool'] == false) && !$chkUser) {
 			$errmsg;
 			foreach ($loginfo as $err) {
 				$errmsg .= $err['msg'] . " ";
 			}
+
+		if (self::getConfig()->get('debug-choice'))
 			$ost->logWarning('MLA login error (' . $username . ')', trim($errmsg), false);
 			
 		}
 		if ($chkUser) {
-			$ost->logWarning('MLA login (' . $username . ')', $loginfo[0]['msg'], false);
+			if (self::getConfig()->get('debug-choice'))
+				$ost->logWarning('MLA login success(' . $username . ')', $loginfo[0]['msg'], false);
 			return $this->authOrCreate($username);
 		}
 		else {
@@ -728,20 +693,25 @@ static function _connectcheck() {
 
 	function authOrCreate($username) {
 		global $cfg, $ost;
-		
 		$mode = $cfg->getClientRegistrationMode();
-		$ost->logWarning('MLA Client Registration Mode (' . $username . ')', $mode, false);
+		$instance = $this->config->config['sync_data']->ht['namespace'];
 		
-	switch ($this->type) {
+			if (self::getConfig()->get('debug-choice')){
+				$ost->logDebug('MLA Registraion Mode', 'System set to : '.$mode, false);
+				$ost->logWarning('MLA Instance (' . $username . ')', $instance, false);
+			}
+		switch ($this->type) {
 			case 'staff':
+			//$ost->logDebug('MLA StaffSession', json_encode(StaffSession::lookup($username)), false);
 				if (($user = StaffSession::lookup($username)) && $user->getId()) {
 					if (!$user instanceof StaffSession) {
 						// osTicket <= v1.9.7 or so
 						$user = new StaffSession($user->getId());
 					}
+					//$ost->logDebug('MLA Staff User', json_encode(($user)), false);
 					return $user;
-				}
-				else {
+				} else {
+					
 					$admin_groups = preg_split('/;|,/', $this->config->get('multiauth-admin-group'));
 					$staff_groups = preg_split('/;|,/', $this->config->get('multiauth-staff-group'));
 					$chkgroup;
@@ -755,16 +725,18 @@ static function _connectcheck() {
 							$ldap->searchPassword = $data['bind_pw'];
 							
 							if ($ldap->connect()) {
+								//$ost->logWarning('MLA ldap connect (' . $username . ')', "", false);
 								foreach ($staff_groups as $staff_group) {
 									if ($ldap->checkGroup($username, $staff_group)) {
 										$chkgroup = true;
-										break 3;
+										break 2;
 									} else {
 										$conninfo[] = array(
 											false,
 											$data['sd'] . " error: " . $ldap->ldapErrorCode . " - " . $ldap->ldapErrorText
 										);
-										//$ost->logWarning('ldap checkgrp (' . $username . ')', $conninfo[1], false);
+										if (self::getConfig()->get('debug-verbose'))
+											$ost->logWarning('MLA ldap checkgrp (' . $username . ')', $conninfo[1], false);
 									}
 								}
 							} else {
@@ -773,11 +745,12 @@ static function _connectcheck() {
 									$data['sd'] . " error: " . $ldap->ldapErrorCode . " - " . $ldap->ldapErrorText
 								);
 
-								//LdapMultiAuthPlugin::logger('info', 'ldap-ConnInfo', $conninfo);
+								if (self::getConfig()->get('debug-verbose'))
+									$ost->logWarning('MLA ldap ConnInfo (' . $username . ')', $conninfo[1], false);
 							}
 						}
-					if ($this->getConfig()->get('multiauth-staff-register') && $chkgroup) {
-						if (!($info = $this->search($username, false))) {
+					if ($this->getConfig($this->instance->ins)->get('multiauth-staff-register') && $chkgroup) {
+						if (!($info = $this->search($username)[0])) {
 							return;
 						}
 						$errors = array();
@@ -793,24 +766,24 @@ static function _connectcheck() {
 						$staff['isadmin'] = 0;
 						$staff['isactive'] = 1;
 						$staff['group_id'] = 1;
-						$staff['dept_id'] = $this->getConfig()->get('multiauth_staff_dept');
+						$staff['dept_id'] = $this->getConfig($this->instance->ins)->get('multiauth_staff_dept');
 						$staff['role_id'] = 1;
-						$staff['backend'] = "mldap".$this->pinstance->backend;
+						$staff['backend'] = "mldap.".str_replace('.', '' , str_replace('instance', 'i' , str_replace('plugin', 'p' , $instance)));
 						$staff['assign_use_pri_role'] = "on";
 						$staff['isvisible'] = 1;
 						$staff['prems'] = array("visibility.agents", "visibility.departments");
 						
 						$staffcreate = Staff::create();
-						if ($staffcreate->update($staff,$errors)) {
-							$ost->logWarning('MLA StaffCreateed (' . $username . ')', json_encode($staff), false);
-							if (($user = StaffSession::lookup($username)) && $user->getId()) {
+						if ($staffcreate->update($staff, $errors)) {
+							$ost->logWarning('MLA Staff Created (' . $username . ')', json_encode($staff), false, true);
+							if (($user = StaffSession::lookup($username))) {
 								if (!$user instanceof StaffSession) {
 									$user = new StaffSession($user->getId());
 								}
 								return $user;
 							}							
 						} else {
-							$ost->logWarning('ldap Staff CreateError (' . $username . ')', json_encode($staff), false);
+							$ost->logWarning('MLA Staff CreateError (' . $username . ')', json_encode($staff), false);
 						}
 					}
 				}
@@ -821,8 +794,8 @@ static function _connectcheck() {
 				// addresss as well as the username when looking up the user
 				// locally.
 
-				if (!($info = $this->search($username))) {
-					$ost->logWarning('ldap info (' . $username . ')',json_encode($info), false);
+				if (!$info = $this->search($username)['0']) {
+					$ost->logWarning('MLA ldap info (' . $username . ')',json_encode($info), false);
 				return;
 				}
 				
@@ -842,7 +815,6 @@ static function _connectcheck() {
 					$info['last'] = $info['last'];
 					$info['username'] = $info['username'];
 					$info['sendemail'] = false;
-					
 					switch ($mode) {
 							case 'public':								
 								if ($client = new ClientCreateRequest($this, $username, $info)) {									
@@ -855,14 +827,14 @@ static function _connectcheck() {
 								
 								if ($this->getConfig()->get('multiauth-force-register')) {
 									//only needed if closed
-									$info['backend'] = 'mldap.client'.$this->getConfig()->get('backend');
+									$info['backend'] = 'mldap.client.'.str_replace('.', '' , str_replace('instance', 'i' , str_replace('plugin', 'p' , $instance)));
 									$info['timezone'] = $cfg->getTimezone();
 									//$info['lang'] = $cfg->getLanguage(); needs more testing
 									
 									$create   = User::fromVars($info);
 									$register = UserAccount::register($create, $info, $errors);
 									$client   = new ClientSession(new EndUser($register->getUser()));
-									$ost->logWarning('MLA user-creation-success (' . $username . ')', 'user was created '.$mode, false);
+									$ost->logWarning('MLA user-creation-success (' . $username . ')', 'user was created', false);
 								} else {
 									$ost->logWarning('MLA user-creation-failed (' . $username . ')', 'user creation failed (enable force user creation)', false);
 								}
@@ -872,7 +844,7 @@ static function _connectcheck() {
 				}
 				return $client;
 			}
-			return null;
+			return;
 	}
 
 	function create_account($username, $type) {
@@ -881,29 +853,28 @@ static function _connectcheck() {
 	function lookup($lookup_dn) {
 		$lookup_user = array();
 		preg_match('/(dc=(?:[^C]|C(?!N=))*)(?:;|$)/i', $lookup_dn, $match);
-		//LdapMultiAuthPlugin::logger(LOG_DEBUG, 'ldap-lookup (' . $lookup_dn . ')', $lookup_dn);
 		$base_dn = strtolower($match[0]);
 
-		$key = array_search($base_dn, preg_split('/;/', strtolower($this->getConfig()
+		$key = array_search($base_dn, preg_split('/;/', strtolower($this->getConfig($this->instance->ins)
 			->get('basedn'))));
 
 		$key = (!isset($key) || is_null($key)) ? 0 : $key;
 
 		$dn = trim($base_dn);
 
-		$servers = $this->getConfig()
+		$servers = $this->getConfig($this->instance->ins)
 			->get('servers');
 		$serversa = preg_split('/\s+/', $servers) [$key];
 
-		$sd = $this->getConfig()
+		$sd = $this->getConfig($this->instance->ins)
 			->get('shortdomain');
 		$sda = preg_split('/;|,/', $sd) [$key];
 
-		$bind_dn = $this->getConfig()
+		$bind_dn = $this->getConfig($this->instance->ins)
 			->get('bind_dn');
 		$bind_dna = preg_split('/;/', $bind_dn) [$key];
 
-		$bind_pw = $this->getConfig()
+		$bind_pw = $this->getConfig($this->instance->ins)
 			->get('bind_pw');
 		$bind_pwa = preg_split('/;|,/', $bind_pw) [$key];
 
@@ -942,12 +913,10 @@ static function _connectcheck() {
 				false,
 				$data['sd'] . " error: " . $ldap->ldapErrorCode . " - " . $ldap->ldapErrorText
 			);
-
-			LdapMultiAuthPlugin::logger('info', 'ldap-ConnInfo', $conninfo);
+				LdapMultiAuthPlugin::logger('info', 'MLA ldap-ConnInfo', $conninfo);
 		}
 		$lookup_user = self::flatarray($lookup_user);
 		$lookup_user['name'] = $lookup_user['full'];
-		//$lookup_user['office'] = $lookup_user['full'];
 		//LdapMultiAuthPlugin::logger('info', 'LookupInfo',($lookup_user), true);
 		return $lookup_user;
 	}
@@ -967,23 +936,26 @@ static function _connectcheck() {
 			$ldap->searchPassword = $data['bind_pw'];
 
 			if ($ldap->connect()) {
-				$filter = self::getConfig()->get('search_base');
+				$filter = self::getConfig($this->instance->ins)->get('search_base');
 				if ($userlist = $ldap->getUsers($query, $this->adschema() , $filter)) {
-					$ost->logDebug('ldap search(' . $query . ')', json_encode($userlist), false);
-					$temp_userlist = $this->keymap($userlist);
-					$combined_userlist = array_merge($combined_userlist, self::flatarray($temp_userlist));
+					if (self::getConfig()->get('debug-choice'))
+						$ost->logDebug('MLA '.$data['sd'].' userlist (' . $query . ')', json_encode($userlist), false);
+					$temp_userlist = self::flatarray($this->keymap($userlist));
+					$combined_userlist = array_merge($combined_userlist, $temp_userlist);
 				} else {
-					//$ost->logError('search-error (' .$query. ')', $ldap->ldapErrorCode . " - " . $ldap->ldapErrorText, false);
+					if (self::getConfig()->get('debug-choice'))
+						$ost->logError('MLA search-error (' .$query. ')', $data['sd'] . ' #' .$ldap->ldapErrorCode . " - " . $ldap->ldapErrorText, false);
 				}
 			} else {
 				$conninfo[] = array(
 					false,
 					$data['sd'] . " error: " . $ldap->ldapErrorCode . " - " . $ldap->ldapErrorText
 				);
-				$ost->logWarning('search-info', $ldap->ldapErrorCode . " - " . $ldap->ldapErrorText, false);
+				$ost->logWarning('MLA search-info', $ldap->ldapErrorCode . " - " . $ldap->ldapErrorText, false);
 			}
 		}
-		$ost->logDebug('ldap-search (' . $query . ')', json_encode($combined_userlist), false);
+		if (self::getConfig()->get('debug-verbose'))
+			$ost->logDebug('MLA search combined-userlist (' . $query . ')', json_encode($combined_userlist), false);
 		return $combined_userlist;
 	}
 }
@@ -996,8 +968,13 @@ class StaffLDAPMultiAuthentication extends StaffAuthenticationBackend implements
 	}
 	//queries the user information
 	function authenticate($username, $password = false, $errors = array()) {
-		return $this->_ldap->authenticate($username, $password);		
+			global $ost;
+		//$ost->logWarning('MLA Staff authenticate', '', false);	
+		return $this
+			->_ldap
+			->authenticate($username, $password);		
 	}
+	
 	function getName() {
 		$config = $this->config;
 		list($__, $_N) = $config::translate();
@@ -1005,35 +982,29 @@ class StaffLDAPMultiAuthentication extends StaffAuthenticationBackend implements
 	}
 	//adding new users
 	function lookup($query) {
-		global $ost;
-		$list = $this
+	$list = $this
 			->_ldap
 			->lookup($query);
 		if ($list) {
 			$list['backend'] = static ::$id;
 			$list['id'] = $this->getBkId() . ':' . $list['dn'];
 		}
-		//$ost->logWarning('lookup-result', $list, false);
-		return ($list);
 	}
-		
 	//General searching of users
 	function search($query) {
-		global $ost;
 		if (strlen($query) < 3) return array();
 		$list = array(
 			$this
 				->_ldap
-				->search($query)
-		);
-		foreach ($list as & $l) {
+				->search($query))[0];
+		foreach ($list as &$l) {
 			$l['backend'] = static ::$id;
 			$l['id'] = $this->getBkId() . ':' . $l['dn'];
 		}
-		//$ost->logDebug('search-result', $list , false);
 		return $list;
 	}
 }
+
 class ClientLDAPMultiAuthentication extends UserAuthenticationBackend {
 	static $name = "Multi LDAP Authentication";
 	static $id = "mldap.client";
@@ -1041,9 +1012,6 @@ class ClientLDAPMultiAuthentication extends UserAuthenticationBackend {
 		$this->_ldap = new LDAPMultiAuthentication($config, 'client');
 		$this->config = $config;
 		if ($domain = $config->get('basedn')) self::$name .= sprintf(' (%s)', $domain);
-				echo "<pre>";
-		//var_export ($this->instance->getName());
-		echo "</pre>";
 	}
 	function getName() {
 		$config = $this->config;
@@ -1051,7 +1019,9 @@ class ClientLDAPMultiAuthentication extends UserAuthenticationBackend {
 		return $__(static ::$name);
 	}
 	function authenticate($username, $password = false, $errors = array()) {
-		$object = $this->_ldap->authenticate($username, $password);
+		$object = $this 
+			->_ldap
+			->authenticate($username, $password);
 		if ($object instanceof ClientCreateRequest) $object->setBackend($this);
 		return $object;
 	}
