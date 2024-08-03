@@ -19,30 +19,34 @@ class SyncLDAPMultiClass extends LDAPMultiAuthentication {
 	var $log_report;
 	var $sync_results;
 
-	public function __construct($instance) {		
-		$this->config = self::mlconfig($instance);
-		$this->instance = $instance;
+	public function __construct($instance) {
+		if (is_string($instance)){
+			$this->config = self::mlconfig($instance);
+			$this->config['backend'] = str_replace('.', '' , str_replace('instance', 'i' , str_replace('plugin', 'p' , $instance)));
+		} else {
+			$this->instance = $instance;
+		}
 		$this->LP = new LDAPMultiAuthentication($this->config);
 	}
 	
 	//** Only used for AJAX
-	static function _connectcheck() {
+	static function _connectcheck($sync) {
 		
         $conninfo = array();
         $ldapinfo = array();
 
-		foreach (preg_split('/;/', $LP->config['basedn']) as $i => $dn) {
+		foreach (preg_split('/;/', $sync->config['basedn']) as $i => $dn) {
 			$dn = trim($dn);
-			$servers = $LP->config['servers'];
+			$servers = $sync->config['servers'];
 			$serversa = preg_split('/\s+/', $servers);
 
-			$sd = $LP->config['shortdomain'];
+			$sd = $sync->config['shortdomain'];
 			$sda = preg_split('/;|,/', $sd);
 
-			$bind_dn = $LP->config['bind_dn'];
+			$bind_dn = $sync->config['bind_dn'];
 			$bind_dna = preg_split('/;/', $bind_dn) [$i];
 
-			$bind_pw = $LP->config['bind_pw'];
+			$bind_pw = $sync->config['bind_pw'];
 			$bind_pwa = preg_split('/;|,/', $bind_pw) [$i];
 
 			$ldapinfo[] = array(
@@ -64,7 +68,7 @@ class SyncLDAPMultiClass extends LDAPMultiAuthentication {
 
             if ($ldap->connect()) {
                 $conninfo[] = array(
-                    'bool' => true,
+                    'bool' => "true",
                     'msg' => $data['sd'] . ' Connected OK!'
                 );
             }
@@ -81,6 +85,7 @@ class SyncLDAPMultiClass extends LDAPMultiAuthentication {
 	function user_list() {
 		$userlist = array();
 		$ldapinfo;
+		global $ost;
 		foreach (preg_split('/;/', $this->config['basedn']) as $i => $dn) {
 			$dn = trim($dn);
 			$servers = $this->config['servers'];
@@ -103,6 +108,7 @@ class SyncLDAPMultiClass extends LDAPMultiAuthentication {
 				'bind_pw' => trim($bind_pwa)
 			);
 		}
+			//$ost->logError('MLA sync ldapinfo', json_encode($ldapinfo), '');
 		$combined_userlist = array();
 
 		foreach ($ldapinfo as $data) {
@@ -117,7 +123,6 @@ class SyncLDAPMultiClass extends LDAPMultiAuthentication {
 			
 			if ($ldap->connect()) {
 				$attr = str_getcsv(strtolower("samaccountname,mail,givenname,sn,whenchanged,useraccountcontrol,objectguid," . implode(',', $sync_map)) , ',');
-error_log(json_encode($attr));
 				if ($userlist = $ldap->getUsers('', $attr, $this->config['sync_filter'])) {
 					$combined_userlist = array_merge($combined_userlist, $userlist);
 				}
@@ -204,7 +209,7 @@ error_log(json_encode($attr));
 
 	public function mlconfig($instance) {
 		$configvalues;
-		$sql = "SELECT `key`,`value` FROM " . TABLE_PREFIX . "config WHERE `namespace` = '" . $instance->plugin . "';";
+		$sql = "SELECT `key`,`value` FROM " . TABLE_PREFIX . "config WHERE `namespace` = '" . $instance . "';";
 		$result = db_query($sql);
 
 		while ($row = db_fetch_array($result)) {
@@ -382,7 +387,7 @@ error_log(json_encode($attr));
 //Check users and send alert
 	function check_users() {
 		global $ost;
-		ini_set('memory_limit', '512M');
+		ini_set('memory_limit', '1024M');
 		$sync_time_start = microtime(true);
 		$list = $this->user_list();
 		$log_header = ("(" . count($list) . ") 	total ldap entries.<br>");
@@ -496,19 +501,19 @@ error_log(json_encode($attr));
 									FROM " . TABLE_PREFIX . "user 
 									LEFT JOIN " . TABLE_PREFIX . "user_email on " . TABLE_PREFIX . "user.id=" . TABLE_PREFIX . "user_email.user_id
 									LEFT JOIN " . TABLE_PREFIX . "user_account on " . TABLE_PREFIX . "user.id = " . TABLE_PREFIX . "user_account.user_id
-									LEFT JOIN " . TABLE_PREFIX . "ldap_sync on " . TABLE_PREFIX . "user.id = " . TABLE_PREFIX . "ldap_sync.id WHERE " . TABLE_PREFIX . "user_account.backend = 'mldap.client". $this->instance->backend ."';";
+									LEFT JOIN " . TABLE_PREFIX . "ldap_sync on " . TABLE_PREFIX . "user.id = " . TABLE_PREFIX . "ldap_sync.id WHERE " . TABLE_PREFIX . "user_account.backend = 'mldap.client". $this->config['backend'] ."';";
 			$sync_array = db_query($sql);
 			$g;
 			
 			foreach (db_assoc_array($sync_array, MYSQLI_ASSOC) as $sync) {
-				$uid = $sync["user_id"];
-				unset($sync["user_id"]);		
+				$uid = $sync->config["user_id"];
+				unset($sync->config["user_id"]);		
 				//Update any username changes
-					if ($guiduser = $guid_users[$sync["guid"]]) {
-						if (!empty($sync['username']))
-							if ($guiduser->samaccountname !== $sync['username']){
+					if ($guiduser = $guid_users[$sync->config["guid"]]) {
+						if (!empty($sync->config['username']))
+							if ($guiduser->samaccountname !== $sync->config['username']){
 							$this->update_username($guiduser->samaccountname, $uid); 
-							//$log_header .= "GUID: " . $guiduser->samaccountname ."-" . $sync['username'] . "</br>";
+							//$log_header .= "GUID: " . $guiduser->samaccountname ."-" . $sync->config['username'] . "</br>";
 							$g++;
 							}
 				}	
@@ -553,7 +558,7 @@ error_log(json_encode($attr));
 			foreach (db_assoc_array($qry_guests, MYSQLI_ASSOC) as $guests) {
 				$key = $guests['guid'];
 				db_query("INSERT INTO " . TABLE_PREFIX . "user_account(user_id, status, timezone, username, backend, extra, registered)
-						values ('" . $guests['id'] . "',1, '$default_timezone', '" . $guid_users[$key]->samaccountname . "','mldap.client". $this->instance->backend ."', '{\"browser_lang\":\"$default_lang\"}', '" . date('Y-m-d H:i:s') . "');");
+						values ('" . $guests['id'] . "',1, '$default_timezone', '" . $guid_users[$key]->samaccountname . "','mldap.client". $this->config['backend'] ."', '{\"browser_lang\":\"$default_lang\"}', '" . date('Y-m-d H:i:s') . "');");
 			}
 
 			//Update all users based on the ObjectID
@@ -586,7 +591,7 @@ error_log(json_encode($attr));
 			//update all user attributes.
 			$this->update_users($updateusers);
 		}
-		//$LP->logger('debug', '', , false);
+		//$this->logger('debug', '', , false);
 		//execution time of the script
 		$execution_time = $this->formatmilliseconds(number_format(microtime(true) - $sync_time_start, 3) * 1000);
 		$log_footer = '    </tbody>
@@ -610,8 +615,8 @@ if ($_REQUEST['sync']){
 	//return json_encode(array("info" => "done", "result" => $results));
 	}
 if ($_REQUEST['check']){
-	$sync = new SyncLDAPMultiClass(explode('plugin.', $_REQUEST['data'])[1]);
-	$results = $sync->_connectcheck();
+	$sync = new SyncLDAPMultiClass($_REQUEST['instance']);
+	$results = $sync->_connectcheck($sync);
 	return json_encode(array("info" => "done", "result" => $results));
 	}
 
