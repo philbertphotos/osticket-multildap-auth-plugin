@@ -30,9 +30,7 @@ Sync Email
 ![image](https://user-images.githubusercontent.com/2892474/165946917-db6031dc-36ba-4470-8b54-b02154b50bfd.png)
 
 Example of sync report in my environment.
-
-![image](https://user-images.githubusercontent.com/2892474/173095409-b31fb9a6-bf32-4a0a-b40a-b01f284ea19f.png)
-
+![image](https://github.com/user-attachments/assets/6ba05d32-4b97-4bf0-b372-ffe9817b2679)
 
 Installing
 ==========
@@ -58,7 +56,6 @@ Child domain 20,000+ users
 
 It syncs both the agents and users without issues with about 1000+ users registered automatically.
 Made plugin backward compatible with older versions.
-![image](https://github.com/user-attachments/assets/6ba05d32-4b97-4bf0-b372-ffe9817b2679)
 
 Bug fixes
 ===========
