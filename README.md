@@ -22,6 +22,7 @@ Features
  - Support for Plugin Instances
  
  User Lookup
+ 
  ![image](https://github.com/user-attachments/assets/89b00289-ccd4-44aa-9fe6-627faa453408)
 
 Sync Email
@@ -42,14 +43,18 @@ Configuration
 =============
 It is pretty stright forward just when adding the second domain make user you put a "," or ";" where needed.
 see image below
-sync settings
+
+![image](https://github.com/user-attachments/assets/19d5b1d1-fbe7-4661-9d68-a672fb0e96df)
+
+Sync Settings
+
 ![image](https://github.com/user-attachments/assets/6712c595-5dce-4545-8b4d-8411f76a35a6)
+
 CRON JOBS required for user syncing to run.
 
 In my environment we have a Parent and Child domain
 Parent domain 8000+ users
 Child domain 20,000+ users
-
 
 ![image](https://github.com/user-attachments/assets/8aad036c-1584-450a-8eb3-34743f84bc83)
 
