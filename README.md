@@ -1,4 +1,4 @@
-#Multi LDAP authentication and LDAP Sync v1.9 for osTicket 
+#Multi LDAP authentication and LDAP Sync v1.9.15 for osTicket 
 =====================================
 Plugin for OS Ticket that allows for authentication with multiple domains and servers for agents and/or clients on osTicket also syncs user defined attributes from AD LDAP. 
 Works and tested with version 1.10 to v1.17+ and PHP 8+
@@ -54,9 +54,11 @@ Parent domain 8000+ users
 Child domain 20,000+ users
 
 
+![image](https://github.com/user-attachments/assets/8aad036c-1584-450a-8eb3-34743f84bc83)
 
 It syncs both the agents and users without issues with about 1000+ users registered automatically.
 Made plugin backward compatible with older versions.
+![image](https://github.com/user-attachments/assets/6ba05d32-4b97-4bf0-b372-ffe9817b2679)
 
 Bug fixes
 ===========
@@ -64,10 +66,12 @@ Syncing bug
 Added Instances support
 removed "ldap.clinet" references to avoid conflicts.
 sync_data table not refrenced or updated properly.
+change instance logic 
+updated and changed debug code.
 
 Roadmap
 ==========
-Better Instance support in plugin database.
+Better Instance support in plugin database.(almost done)
 Proper manual Sync button
 UTF8 support for languages.
 Ldap caching for large LDAP domains
