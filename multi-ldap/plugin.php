@@ -1,7 +1,7 @@
 <?php
 return array(
     'id' =>             'multiauth:ldap',
-    'version' =>        '1.9.11',
+    'version' =>        '1.9.15',
 	'ost_version' =>    '1.16', # Require osTicket v1.17+
     'name' =>           'Multi LDAP Authentication and Lookup',
     'author' =>         'Joseph Philbert',
