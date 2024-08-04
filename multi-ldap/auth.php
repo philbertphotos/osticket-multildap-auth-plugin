@@ -50,21 +50,15 @@ class LdapMultiAuthPlugin extends Plugin {
 		if ($config->get('multiauth-client')) UserAuthenticationBackend::register(new ClientLDAPMultiAuthentication($config));
 	}
 	
-	//Checks if osticket supports instances
+	//Checks osticket instances if any
 	function plugininstance() {
-		global $ost;
 			self::$pluginInstance = self::getPluginInstance(null);
-			//$this->pluginInstance = self::getPluginInstance(null);
 			$this->instance = new stdClass();
-		if (method_exists($this,'getInstances')) {
-			$ins = $this->getInstances($this->id)->key['plugin_id'];
-			$this->instance->plugin = "plugin.".$this->id.".instance.".$ins;
-			$this->instance->backend = ".p".$this->id."i".$ins;
-			$this->instance->staff = ".p".$this->id."i".$ins;
-			$this->instance->ins = $this->getInstances()->first();
-		} else {
-			$this->instance->plugin = "plugin.".$this->id;
-		}
+			$ins = self::$pluginInstance->id;
+			$plugin_id = self::$pluginInstance->plugin_id;
+			$this->instance->plugin = "plugin.".$plugin_id.".instance.".$ins;
+			$this->instance->backend = ".p".$plugin_id."i".$ins;
+			$this->instance->staff = ".p".$plugin_id."i".$ins;
 	}
 	
 	function loadSync() {
@@ -96,14 +90,14 @@ class LdapMultiAuthPlugin extends Plugin {
 		}
 		$instance = $this->getConfig(self::$pluginInstance)->config['sync_data']->ht['namespace'];
 		$this->time_zone = db_result(db_query("SELECT value FROM `" . TABLE_PREFIX . "config` WHERE `key` = 'default_timezone'"));		
+		$this->logger('warning', 'MLA instance - '.$this->getConfig()->get('shortdomain'), $instance, true);
 		
-		
-		$sync_info = db_fetch_row(db_query('SELECT value FROM ' . TABLE_PREFIX . 'config WHERE namespace = "' . $instance . '" AND `key` = "sync_data";')) [0];		
-		
-		$jsondata = json_decode($sync_info);
-			$this->logger('warning', "MLA sync info", ($jsondata), true);
-		$schedule = $this->DateFromTimezone(strftime("%Y-%m-%d %H:%M:%S", $jsondata->schedule) , 'UTC', $this->time_zone, 'F j, Y, H:i');
-		$lastrun = $this->DateFromTimezone(strftime("%Y-%m-%d %H:%M:%S", $jsondata->lastrun) , 'UTC', $this->time_zone, 'F j, Y, H:i');
+		$sync_info = json_decode(db_fetch_row(db_query('SELECT value FROM ' . TABLE_PREFIX . 'config WHERE namespace = "' . $instance . '" AND `key` = "sync_data";'))[0]);
+
+			$this->logger('warning', "MLA sync info", ($sync_info), true);
+			
+		$schedule = $this->DateFromTimezone(strftime("%Y-%m-%d %H:%M:%S", $sync_info->schedule) , 'UTC', $this->time_zone, 'F j, Y, H:i');
+		$lastrun = $this->DateFromTimezone(strftime("%Y-%m-%d %H:%M:%S", $sync_info->lastrun) , 'UTC', $this->time_zone, 'F j, Y, H:i');
 		$this->executed = time();
 		$date = new DateTime('now', new DateTimeZone($this->time_zone));
 
@@ -112,18 +106,18 @@ class LdapMultiAuthPlugin extends Plugin {
 		$this->sync_cron($this->crontime);
 		$this->loadSync();
 			
-			//Load Sync info
-			$sync = new SyncLDAPMultiClass($instance);
-			$allowaction = $this->allowAction();
+			$allowaction = $this->allowAction(); //check to see if Action is allowed.
 				$this->logger('warning', 'MLA Allow Check - '.$this->getConfig()->get('shortdomain'), 'allow action : '. var_export($allowaction, 1), true);
 					
 		if ($allowaction) {
+			//Load Sync info
+			$sync = new SyncLDAPMultiClass($instance);
 			if ($this->getConfig()->get('sync-users') || $this->getConfig()->get('sync-agents')) {
 					//$this->logger('warning', 'MLA Allow Action - '.$this->getConfig()->get('basedn'),'---- ',true);
 				$excu = $this->DateFromTimezone(strftime("%Y-%m-%d %H:%M", $this->lastExec) , 'UTC', $this->time_zone, 'F d Y g:i a');
 				$nextexcu = $this->DateFromTimezone(strftime("%Y-%m-%d %H:%M", $this->nextExec) , 'UTC', $this->time_zone, 'F d Y g:i a');
 				$results = $sync->check_users();				
-					$this->logger('warning', 'MLA Check Users', json_encode($results), true);
+					$this->logger('warning', 'MLA Check Users', ($results), true);
 					
 				if (empty($results)) {
 					$this->logger('warning', 'MLA LDAP Sync', 'Sync executed on (' . ($excu) . ') next execution in (' . $nextexcu . ')', true);
@@ -227,6 +221,7 @@ class LdapMultiAuthPlugin extends Plugin {
                 WHERE `key` = "sync_data" AND `namespace` = "' . $this->instance->plugin . '";';
 			if (self::getConfig()->get('debug-verbose'))
 				$ost->logDebug('MLA updateLastrun', ($sql), false);
+			error_log($sql);
 		return db_query($sql);
 	}
 
@@ -405,7 +400,7 @@ class LdapMultiAuthPlugin extends Plugin {
 			$loglevel = array('Error', 'Warning','Debug'
 			);
 			//Save log based on system log level settings.
-			$sql = 'INSERT INTO ' . TABLE_PREFIX . "syslog" . ' SET created=NOW(), updated=NOW() ' . ',title=' . db_input(Format::sanitize($title, true)) . ',log_type=' . db_input($loglevel[$level]) . ',log="' . $message . '",ip_address=' . db_input($_SERVER['REMOTE_ADDR']);
+			$sql = 'INSERT INTO ' . TABLE_PREFIX . "syslog" . ' SET created=NOW(), updated=NOW() ' . ',title=' . db_input(Format::sanitize($title, true)) . ',log_type=' . db_input($loglevel[$level]) . ',log=\'' . $message . '\',ip_address=' . db_input($_SERVER['REMOTE_ADDR']);
 
 			if ($force) {
 				db_query($sql, false);
@@ -922,7 +917,6 @@ class LDAPMultiAuthentication {
 	}
 
 	function search($query) {
-		global $ost;
 		$userlist = array();
 		$combined_userlist = array();
 		$ldapinfo = $this->ldapinfo();
@@ -968,8 +962,6 @@ class StaffLDAPMultiAuthentication extends StaffAuthenticationBackend implements
 	}
 	//queries the user information
 	function authenticate($username, $password = false, $errors = array()) {
-			global $ost;
-		//$ost->logWarning('MLA Staff authenticate', '', false);	
 		return $this
 			->_ldap
 			->authenticate($username, $password);		
@@ -982,17 +974,21 @@ class StaffLDAPMultiAuthentication extends StaffAuthenticationBackend implements
 	}
 	//adding new users
 	function lookup($query) {
-	$list = $this
+		error_log('MLA look ' . $query);
+		$list = $this
 			->_ldap
 			->lookup($query);
 		if ($list) {
 			$list['backend'] = static ::$id;
 			$list['id'] = $this->getBkId() . ':' . $list['dn'];
 		}
+
 	}
 	//General searching of users
 	function search($query) {
 		if (strlen($query) < 3) return array();
+							global $ost;
+		$ost->logWarning('MLA search', '', false);
 		$list = array(
 			$this
 				->_ldap
@@ -1001,6 +997,7 @@ class StaffLDAPMultiAuthentication extends StaffAuthenticationBackend implements
 			$l['backend'] = static ::$id;
 			$l['id'] = $this->getBkId() . ':' . $l['dn'];
 		}
+
 		return $list;
 	}
 }
