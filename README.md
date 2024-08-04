@@ -2,6 +2,7 @@
 =====================================
 Plugin for OS Ticket that allows for authentication with multiple domains and servers for agents and/or clients on osTicket also syncs user defined attributes from AD LDAP. 
 Works and tested with version 1.10 to v1.17+ and PHP 8+
+
 |CURRENTLY DO NOT SUPPORT MULTIPLE INSTANCES|
 
 
