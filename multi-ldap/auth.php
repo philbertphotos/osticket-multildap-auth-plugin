@@ -501,14 +501,13 @@ class LDAPMultiAuthentication {
 
 	function keymap($arr) {
 		$keys = ($this->multi_re_key($arr, array(
-			'samaccountname',
-			'givenname',
+			'sAMAccountName',
+			'givenName',
 			'sn',
-			'displayname',
+			'displayName',
 			'mail',
-			'telephonenumber',
-			'mobile',
-			'distinguishedname'
+			'telephoneNumber',
+			'distinguishedName',
 		) , array(
 			'username',
 			'first',
@@ -516,22 +515,20 @@ class LDAPMultiAuthentication {
 			'full',
 			'email',
 			'phone',
-			'mobile',
-			'dn'
+			'dn',
 		)));
 		return $keys;
 	}
 
 	function adschema() {
 		return array(
-			'samaccountname',
-			'givenname',
+			'sAMAccountName',
 			'sn',
-			'displayname',
+			'givenName',
+			'displayName',
 			'mail',
-			'telephonenumber',
-			'mobile',
-			'distinguishedname'
+			'telephoneNumber',
+			'distinguishedName'
 		);
 	}
 
@@ -556,7 +553,6 @@ class LDAPMultiAuthentication {
 			$ldap->server = preg_split('/;|,/', $data['servers']);
 			$ldap->domain = $data['sd'];
 			$ldap->dn = $data['dn'];
-			$ldap->ssl = $data['ssl'];
 
 			if ($ldap->connect()) {
 				$conninfo[] = array(
@@ -605,17 +601,14 @@ class LDAPMultiAuthentication {
 
 			$bind_pw = $this->getConfig($this->instance->ins)
 				->get('bind_pw');
-			$bind_pwa = preg_split('/;|,/', $bind_pw) [$i];			
-			
-			$ssl = $this->getConfig($this->instance->ins)->get('tls');
+			$bind_pwa = preg_split('/;|,/', $bind_pw) [$i];
 
 			$ldapinfo[] = array(
 				'dn' => $dn,
 				'sd' => $sda[$i],
 				'servers' => trim($serversa[$i]) ,
 				'bind_dn' => trim($bind_dna) ,
-				'bind_pw' => trim($bind_pwa),
-				'ssl' => $ssl
+				'bind_pw' => trim($bind_pwa)
 			);
 		}
 		return $ldapinfo;
@@ -639,8 +632,6 @@ class LDAPMultiAuthentication {
 			$ldap->server = preg_split('/;|,/', $data['servers']);
 			$ldap->domain = $data['sd'];
 			$ldap->dn = $data['dn'];
-			$ldap->ssl = $data['ssl'];
-			
 			if ($ldap->connect()) {
 				$conninfo[] = array(
 					'bool' => true,
@@ -699,7 +690,7 @@ class LDAPMultiAuthentication {
 		global $cfg, $ost;
 		$mode = $cfg->getClientRegistrationMode();
 		$instance = $this->config->config['sync_data']->ht['namespace'];
-		$ins = explode("." , $instance);
+		
 			if (self::getConfig()->get('debug-choice')){
 				$ost->logDebug('MLA Registraion Mode', 'System set to : '.$mode, false);
 				$ost->logWarning('MLA Instance (' . $username . ')', $instance, false);
@@ -716,9 +707,8 @@ class LDAPMultiAuthentication {
 					return $user;
 				} else {
 					
+					$admin_groups = preg_split('/;|,/', $this->config->get('multiauth-admin-group'));
 					$staff_groups = preg_split('/;|,/', $this->config->get('multiauth-staff-group'));
-					if ($this->config->get('debug-verbose'))
-						$ost->logWarning('MLA ldap staffnotfound (' . $username . ')', json_encode($staff_groups), false);					
 					$chkgroup;
 						foreach ($this->ldapinfo() as $data) {
 							$ldap = new AuthLdap();
@@ -728,11 +718,11 @@ class LDAPMultiAuthentication {
 							$ldap->domain = $data['sd'];
 							$ldap->searchUser = $data['bind_dn'];
 							$ldap->searchPassword = $data['bind_pw'];
-							$ldap->ssl = $data['ssl'];
 							
-							if ($ldap->connect()) {								
+							if ($ldap->connect()) {
+								//$ost->logWarning('MLA ldap connect (' . $username . ')', "", false);
 								foreach ($staff_groups as $staff_group) {
-									if ($ldap->checkGroup($username, trim($staff_group))) {
+									if ($ldap->checkGroup($username, $staff_group)) {
 										$chkgroup = true;
 										break 2;
 									} else {
@@ -740,9 +730,8 @@ class LDAPMultiAuthentication {
 											false,
 											$data['sd'] . " error: " . $ldap->ldapErrorCode . " - " . $ldap->ldapErrorText
 										);
-										if ($this->config->get('debug-verbose'))
-											$ost->logWarning('MLA ldap checkgrp (' . $username . ')', json_encode($conninfo[1]), false);
-										$chkgroup = false;
+										if (self::getConfig()->get('debug-verbose'))
+											$ost->logWarning('MLA ldap checkgrp (' . $username . ')', $conninfo[1], false);
 									}
 								}
 							} else {
@@ -756,7 +745,7 @@ class LDAPMultiAuthentication {
 							}
 						}
 					if ($this->getConfig($this->instance->ins)->get('multiauth-staff-register') && $chkgroup) {
-						if (!($info = $this->search($username, true)[0])) {
+						if (!($info = $this->search($username)[0])) {
 							return;
 						}
 						$errors = array();
@@ -774,7 +763,7 @@ class LDAPMultiAuthentication {
 						$staff['group_id'] = 1;
 						$staff['dept_id'] = $this->getConfig($this->instance->ins)->get('multiauth_staff_dept');
 						$staff['role_id'] = 1;
-						$staff['backend'] = "mldap.".($ins[0][0].$ins[1].$ins[2][0].$ins[3]);
+						$staff['backend'] = "mldap.".$this->instance->backend;
 						$staff['assign_use_pri_role'] = "on";
 						$staff['isvisible'] = 1;
 						$staff['prems'] = array("visibility.agents", "visibility.departments");
@@ -799,23 +788,8 @@ class LDAPMultiAuthentication {
 				// Lookup all the information on the user. Try to get the email
 				// addresss as well as the username when looking up the user
 				// locally.
-				/*if (!($info = $this->search($username, true)))
-					return;
-					$ost->logWarning('MLA ldap info (' . $username . ')',json_encode($info), false);
-				
-				$acct = false;
-				foreach (array($username, $info['username'], $info['email']) as $name) {
-					if ($name && ($acct = ClientAccount::lookupByUsername($name)))
-						break;
-					$ost->logWarning('MLA acct info (' . $username . ')',json_encode($acct), false);
-				}
-				if (!$acct)
-					return new ClientCreateRequest($this, $username, $info);
 
-				if (($client = new ClientSession(new EndUser($acct->getUser())))
-						&& !$client->getId())
-					return;*/
-				if (!$info = $this->search($username, true)['0']) {
+				if (!$info = $this->search($username)['0']) {
 					$ost->logWarning('MLA ldap info (' . $username . ')',json_encode($info), false);
 				return;
 				}
@@ -836,8 +810,6 @@ class LDAPMultiAuthentication {
 					$info['last'] = $info['last'];
 					$info['username'] = $info['username'];
 					$info['sendemail'] = false;
-					$info['backend'] = 'mldap.client.'.($ins[0][0].$ins[1].$ins[2][0].$ins[3]);
-					$info['timezone'] = $cfg->getTimezone();
 					switch ($mode) {
 							case 'public':								
 								if ($client = new ClientCreateRequest($this, $username, $info)) {									
@@ -850,8 +822,8 @@ class LDAPMultiAuthentication {
 								
 								if ($this->getConfig()->get('multiauth-force-register')) {
 									//only needed if closed
-									//$info['backend'] = 'mldap.client.'.$ins[0][0].$ins[1]$ins[2][0].$ins[3];
-									//$info['timezone'] = $cfg->getTimezone();
+									$info['backend'] = 'mldap.client.'.$this->instance->backend;
+									$info['timezone'] = $cfg->getTimezone();
 									//$info['lang'] = $cfg->getLanguage(); needs more testing
 									
 									$create   = User::fromVars($info);
@@ -900,31 +872,26 @@ class LDAPMultiAuthentication {
 		$bind_pw = $this->getConfig($this->instance->ins)
 			->get('bind_pw');
 		$bind_pwa = preg_split('/;|,/', $bind_pw) [$key];
-		
-		$ssl = $this->getConfig($this->instance->ins)->get('tls');
 
 		$data = array(
 			'dn' => trim($dn) ,
 			'sd' => trim($sda) ,
 			'servers' => trim($serversa) ,
 			'bind_dn' => trim($bind_dna) ,
-			'bind_pw' => trim($bind_pwa) ,
-			'ssl' => $ssl
+			'bind_pw' => trim($bind_pwa)
 		);
 
 		$ldap = new AuthLdap();
 		$ldap->serverType = 'ActiveDirectory';
 		$ldap->server = preg_split('/;|,/', $data['servers']);
 		$ldap->dn = $data['dn'];
-		$ldap->domain = $data['sd'];
 		$ldap->searchUser = $data['bind_dn'];
 		$ldap->searchPassword = $data['bind_pw'];
-		$ldap->ssl = $data['ssl'];
 
 		if ($ldap->connect()) {
+			$filter = '(distinguishedName={q})';
+			if ($temp_user = $ldap->getUsers(($lookup_dn) , $this->adschema() , $filter)) {
 
-			$filter = '(&(objectCategory=person)(distinguishedName={q}))';
-			if ($temp_user = $ldap->getUsers($lookup_dn, $this->adschema(), $filter)) {
 				$lookup_user = $this->keymap($temp_user);
 			}
 			else {
@@ -942,12 +909,11 @@ class LDAPMultiAuthentication {
 				LdapMultiAuthPlugin::logger('info', 'MLA ldap-ConnInfo', $conninfo);
 		}
 		$lookup_user = self::flatarray($lookup_user);
-		$lookup_user[0]['name'] = $lookup_user[0]['full'];
-		$lookup_user[0]['mobile'] = null;
-		return $lookup_user[0];
+		$lookup_user['name'] = $lookup_user['full'];
+		return $lookup_user;
 	}
 
-	function search($query, $single = false) {
+	function search($query) {
 		global $ost;
 		$userlist = array();
 		$combined_userlist = array();
@@ -958,25 +924,14 @@ class LDAPMultiAuthentication {
 			$ldap->serverType = 'ActiveDirectory';
 			$ldap->server = preg_split('/;|,/', $data['servers']);
 			$ldap->dn = $data['dn'];
-			$ldap->domain = $data['sd'];
 			$ldap->searchUser = $data['bind_dn'];
 			$ldap->searchPassword = $data['bind_pw'];
-			$ldap->ssl = $data['ssl'];
 
 			if ($ldap->connect()) {
-				$search = str_replace("((", "(|(", self::getConfig($this->instance->ins)->get('search_base'));
-				$filter =  $search;
-				if (self::getConfig()->get('debug-choice'))
-					$ost->logDebug('MLA search filter', $search, false);
-				if ($single) {
-					$userlist = $ldap->getUser($query, $this->adschema() , $filter);
-					} else {
-					$userlist = $ldap->getUsers($query, $this->adschema() , $filter);
-				}
-
-				if ($userlist) {
+				$filter = self::getConfig($this->instance->ins)->get('search_base');
+				if ($userlist = $ldap->getUsers($query, $this->adschema() , $filter)) {
 					if (self::getConfig()->get('debug-choice'))
-						$ost->logDebug('MLA '. strtolower($data['sd']).' ldap userlist (' . $query . ')', json_encode($userlist), false);
+						$ost->logDebug('MLA '.$data['sd'].' userlist (' . $query . ')', json_encode($userlist), false);
 					$temp_userlist = self::flatarray($this->keymap($userlist));
 					$combined_userlist = array_merge($combined_userlist, $temp_userlist);
 				} else {
@@ -992,11 +947,10 @@ class LDAPMultiAuthentication {
 			}
 		}
 		if (self::getConfig()->get('debug-verbose'))
-			$ost->logDebug('MLA system userlist (' . $query . ')', json_encode($combined_userlist), false);
+			$ost->logDebug('MLA search combined-userlist (' . $query . ')', json_encode($combined_userlist), false);
 		return $combined_userlist;
 	}
 }
-
 class StaffLDAPMultiAuthentication extends StaffAuthenticationBackend implements AuthDirectorySearch {
 	static $name = "Multi LDAP Authentication";
 	static $id = "mldap";
@@ -1017,45 +971,29 @@ class StaffLDAPMultiAuthentication extends StaffAuthenticationBackend implements
 		return $__(static ::$name);
 	}
 	//adding new users
-	function lookup($dn) {
+	function lookup($query) {
 		$list = $this
 			->_ldap
-			->lookup($dn);
+			->lookup($query);
 		if ($list) {
 			$list['backend'] = static ::$id;
 			$list['id'] = $this->getBkId() . ':' . $list['dn'];
 		}
-		return $list;
-	}
 
+	}
 	//General searching of users
 	function search($query) {
-		global $ost;
-		if (strlen($query) < 3) 
-			return array();
-							
-		$ost->logWarning('MLA search', $query, false);
+		if (strlen($query) < 3) return array();
+							global $ost;
+		$ost->logWarning('MLA search', '', false);
 		$list = array(
 			$this
 				->_ldap
 				->search($query))[0];
 		foreach ($list as &$l) {
-			$l['backend'] = static::$id;
+			$l['backend'] = static ::$id;
 			$l['id'] = $this->getBkId() . ':' . $l['dn'];
 		}
-//$list = $this->rename_array_keys( $list, array('full'), array('name') );
-//$list = json_decode('[{"username":"jason.aubain","first":"Jason","last":"Aubain","name":"Jason Aubain","email":"jason.aubain@vifs.vi.gov","phone":null,"mobile":null,"dn":"CN=Jason Aubain, OU=STT, OU=VIFS, OU=GVIOU, DC=vi, DC=gov","backend":"ldap","id":"mldap.p1i1:CN=Jason Aubain, OU=STT, OU=VIFS, OU=GVIOU, DC=vi, DC=gov"}]',true);
-//$list = 
-/*foreach ($list as &$row){
-	foreach ($row as $key => $value){
-		if ($key == 'full'){
-			$row['name'] = $value;
-			$row['mobile'] = NULL;
-    unset( $row['full'] );
-	//$ost->logWarning('MLA row', json_encode($row, false));
-		}
-}
-}*/			$ost->logWarning('MLA list', json_encode($list, false));
 		return $list;
 	}
 }
