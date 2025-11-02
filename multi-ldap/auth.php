@@ -1027,7 +1027,7 @@ class StaffLDAPMultiAuthentication extends StaffAuthenticationBackend implements
 			$l['backend'] = static::$id;
 			$l['id'] = $this->getBkId() . ':' . $l['dn'];
 		}
-		if (self::getConfig()->get('debug-verbose'))
+		//if (self::getConfig()->get('debug-verbose'))
 			$ost->logWarning('MLA search list', json_encode($list, false));
 		return $list;
 	}
