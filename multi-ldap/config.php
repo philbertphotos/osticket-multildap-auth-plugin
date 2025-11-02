@@ -225,8 +225,8 @@ class LdapMultiAuthPluginConfig extends PluginConfig {
 			)) ,
 
 			'multiauth-admin-group' => new TextboxField(array(
-				'id' => 'staffldapgroup',
-				'label' => $__('Staff') ,
+				'id' => 'adminldapgroup',
+				'label' => $__('Admin') ,
 				'default' => 'Domain Admins',
 				'configuration' => array(
 					'size' => 40,
