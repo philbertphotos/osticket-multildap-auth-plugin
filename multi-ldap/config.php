@@ -18,7 +18,7 @@ class LdapMultiAuthPluginConfig extends PluginConfig {
 				,
 			);
 		}
-		return Plugin::translate('multiauth');
+		return Plugin::translate('auth-mldap');
 	}
 
 	function getDeptList()
@@ -223,17 +223,18 @@ class LdapMultiAuthPluginConfig extends PluginConfig {
 				'hint' => $__('Sets security for clients and staff
                     members can be enabled and disabled independently (use semicolons for multiple groups)') ,
 			)) ,
-			
+
 			'multiauth-admin-group' => new TextboxField(array(
-				'id' => 'adminldapgroup',
-				'label' => $__('Admin') ,
+				'id' => 'staffldapgroup',
+				'label' => $__('Staff') ,
 				'default' => 'Domain Admins',
 				'configuration' => array(
 					'size' => 40,
 					'length' => 60
 				) ,
-				'hint' => $__('Admin registration group membership') ,
-			)) ,			
+				'hint' => $__('Administrator group membership') ,
+			)) ,
+			
 			'multiauth-staff-group' => new TextboxField(array(
 				'id' => 'staffldapgroup',
 				'label' => $__('Staff') ,
