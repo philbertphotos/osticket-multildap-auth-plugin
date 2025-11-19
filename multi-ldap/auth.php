@@ -927,7 +927,6 @@ class LDAPMultiAuthentication {
 		}
 		$lookup_user = self::flatarray($lookup_user);
 		$lookup_user[0]['name'] = $lookup_user[0]['full'];
-		$lookup_user[0]['mobile'] = null;
 		return $lookup_user[0];
 	}
 
@@ -1027,7 +1026,6 @@ class StaffLDAPMultiAuthentication extends StaffAuthenticationBackend implements
 			$l['backend'] = static::$id;
 			$l['id'] = $this->getBkId() . ':' . $l['dn'];
 		}
-		//if (self::getConfig()->get('debug-verbose'))
 			$ost->logWarning('MLA search list', json_encode($list, false));
 		return $list;
 	}
