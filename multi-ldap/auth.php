@@ -952,7 +952,7 @@ class LDAPMultiAuthentication {
 				if (self::getConfig()->get('debug-choice'))
 					$ost->logDebug('MLA search filter', $search, false);
 				if ($single) {
-					$userlist = $ldap->getUser($query, $this->adschema() , $filter);
+					$userlist = $ldap->getUsers($query, $this->adschema() , $filter);
 					} else {
 					$userlist = $ldap->getUsers($query, $this->adschema() , $filter);
 				}
